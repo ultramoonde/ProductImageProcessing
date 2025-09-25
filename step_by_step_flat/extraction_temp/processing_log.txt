@@ -1,3 +1,0 @@
-2025-09-25 12:09:13,544 - INFO - Background removal configured: cost_first
-2025-09-25 12:09:13,544 - INFO - Primary provider: rembg
-2025-09-25 12:09:13,544 - INFO - Estimated cost per 100 images: $0.00

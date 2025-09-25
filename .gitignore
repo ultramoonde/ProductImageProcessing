@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environment variables
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+step_by_step_flat/
+step_by_step_results/
+step_by_step_demo/
+batch_processing_results_*/
+robustness_test_outputs/
+pipeline_test_*/
+background_removed_products/
+original_product_tiles/
+*.csv
+temp_tile_*.png
+*.db
+scraped_images/
+uploads/
+
+# Keep only examples
+!examples/
+!examples/**

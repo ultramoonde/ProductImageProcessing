@@ -1,2 +1,0 @@
-total_images_processed,total_products_extracted,processing_timestamp,output_directory,individual_csvs,consolidated_csv
-4,16,2025-09-23 14:54:50,batch_processing_results_20250923_145442,"['batch_processing_results_20250923_145442/IMG_8138/IMG_8138_products.csv', 'batch_processing_results_20250923_145442/IMG_8104/IMG_8104_products.csv', 'batch_processing_results_20250923_145442/IMG_8110/IMG_8110_products.csv', 'batch_processing_results_20250923_145442/IMG_8448/IMG_8448_products.csv']",batch_processing_results_20250923_145442/CONSOLIDATED_ALL_PRODUCTS.csv

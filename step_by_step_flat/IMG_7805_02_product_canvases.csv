@@ -1,5 +1,0 @@
-product_canvas_id,category,subcategory,canvas_x,canvas_y,canvas_width,canvas_height,source_image,detection_confidence,tile_x,tile_y,tile_width,tile_height
-IMG_7805_canvas_1,Bananen,Bananen,48,767,573,813,IMG_7805,0.95,48,767,573,573
-IMG_7805_canvas_2,Bananen,Bananen,669,767,573,813,IMG_7805,0.95,669,767,573,573
-IMG_7805_canvas_3,Bananen,Bananen,48,1700,573,813,IMG_7805,0.95,48,1700,573,573
-IMG_7805_canvas_4,Bananen,Bananen,669,1700,573,813,IMG_7805,0.95,669,1700,573,573

@@ -1,5 +1,0 @@
-component_id,canvas_id,processing_timestamp,canvas_x,canvas_y,canvas_width,canvas_height,product_image_x,product_image_y,product_image_width,product_image_height,text_area_x,text_area_y,text_area_width,text_area_height,pink_button_detected,pink_button_x,pink_button_y,pink_button_width,pink_button_height,pink_button_center_x,pink_button_center_y,pink_button_confidence
-IMG_8104_component_1,1,2025-09-25T09:53:09.411452,48,629,573,813,48,629,573,573,48,1202,573,240,True,500,1081,96,96,548,1129,0.9017574729191821
-IMG_8104_component_2,2,2025-09-25T09:53:09.412908,669,629,573,813,669,629,573,573,669,1202,573,240,True,1121,1081,96,96,1169,1129,0.9017574729191821
-IMG_8104_component_3,3,2025-09-25T09:53:09.414134,48,1490,573,813,48,1490,573,573,48,2063,573,240,True,500,1942,96,96,548,1990,0.9017574729191821
-IMG_8104_component_4,4,2025-09-25T09:53:09.415515,669,1490,573,813,669,1490,573,573,669,2063,573,240,True,1121,1942,96,96,1169,1990,0.9017574729191821

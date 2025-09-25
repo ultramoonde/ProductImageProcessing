@@ -1,4 +1,0 @@
-product_canvas_id,category,subcategory,canvas_x,canvas_y,canvas_width,canvas_height,source_image,detection_confidence,tile_x,tile_y,tile_width,tile_height
-IMG_8448_canvas_1,Bananen,Bananen,48,580,573,813,IMG_8448,0.95,48,580,573,573
-IMG_8448_canvas_2,Bananen,Bananen,48,1513,573,813,IMG_8448,0.95,48,1513,573,573
-IMG_8448_canvas_3,Bananen,Bananen,669,1513,573,813,IMG_8448,0.95,669,1513,573,573
