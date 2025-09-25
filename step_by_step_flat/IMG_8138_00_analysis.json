@@ -1,0 +1,60 @@
+{
+  "main_category": "Vegan & Vegetarisch",
+  "active_subcategory": "Vegan & Vegetarisch",
+  "available_subcategories": [
+    "Categories",
+    "Vegan & Vegetarisch",
+    "eisch & Fisch",
+    "Nudeln",
+    "Highlights",
+    "Joghurt & Desse",
+    "Milchalternativen"
+  ],
+  "header_tabs": [],
+  "canvas_categories": [
+    {
+      "canvas_id": 1,
+      "x": 48,
+      "y": 923,
+      "width": 573,
+      "height": 573,
+      "main_category": "Unknown",
+      "subcategory": "Vegan & Vegetarisch",
+      "assignment_method": "primary_subcategory_fallback"
+    },
+    {
+      "canvas_id": 2,
+      "x": 669,
+      "y": 923,
+      "width": 573,
+      "height": 573,
+      "main_category": "Unknown",
+      "subcategory": "Vegan & Vegetarisch",
+      "assignment_method": "primary_subcategory_fallback"
+    },
+    {
+      "canvas_id": 3,
+      "x": 48,
+      "y": 1784,
+      "width": 573,
+      "height": 573,
+      "main_category": "Unknown",
+      "subcategory": "Vegan & Vegetarisch",
+      "assignment_method": "primary_subcategory_fallback"
+    },
+    {
+      "canvas_id": 4,
+      "x": 669,
+      "y": 1784,
+      "width": 573,
+      "height": 573,
+      "main_category": "Unknown",
+      "subcategory": "Vegan & Vegetarisch",
+      "assignment_method": "primary_subcategory_fallback"
+    }
+  ],
+  "total_canvases": 4,
+  "confidence": 0.7133482831432559,
+  "method": "enhanced_ui_parsing_with_smart_fallback",
+  "analysis_source": "ui_parser_v3"
+}

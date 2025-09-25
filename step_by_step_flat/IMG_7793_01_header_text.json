@@ -1,0 +1,70 @@
+{
+  "header_region": {
+    "x": 0,
+    "y": 0,
+    "width": 1290,
+    "height": 518,
+    "detection_method": "data_driven_visual_breaks",
+    "boundaries_found": 1
+  },
+  "content_region": {
+    "x": 0,
+    "y": 518,
+    "width": 1290,
+    "height": 2028,
+    "detection_method": "computed_from_boundaries"
+  },
+  "footer_region": {
+    "x": 0,
+    "y": 2546,
+    "width": 1290,
+    "height": 250,
+    "detection_method": "data_driven_visual_breaks",
+    "boundaries_found": 1
+  },
+  "ui_analysis": {
+    "image_dimensions": {
+      "width": 1290,
+      "height": 2796
+    },
+    "regions": {
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 1290,
+        "height": 518,
+        "detection_method": "data_driven_visual_breaks",
+        "boundaries_found": 1
+      },
+      "content": {
+        "x": 0,
+        "y": 518,
+        "width": 1290,
+        "height": 2028,
+        "detection_method": "computed_from_boundaries"
+      },
+      "footer": {
+        "x": 0,
+        "y": 2546,
+        "width": 1290,
+        "height": 250,
+        "detection_method": "data_driven_visual_breaks",
+        "boundaries_found": 1
+      }
+    },
+    "categories": [
+      "Bananen",
+      "\u00c4pfel & Birnen"
+    ],
+    "content_tiles": [],
+    "subcategories": [
+      "Bananen",
+      "\u00c4pfel & Birnen"
+    ],
+    "header_analysis": {
+      "has_categories": true,
+      "has_subcategories": true,
+      "total_elements": 4
+    }
+  }
+}

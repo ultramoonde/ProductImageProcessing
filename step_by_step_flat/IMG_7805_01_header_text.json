@@ -1,0 +1,161 @@
+{
+  "category": "Gemüse",
+  "subcategory": "Obst",
+  "extraction_method": "consensus_llm",
+  "raw_consensus_result": {
+    "categories": [
+      "Gemüse",
+      "Obst",
+      "Äpfel & Birnen",
+      "Backwaren",
+      "Fleisch",
+      "Getränke",
+      "Joghurt & Desserts",
+      "Bananen"
+    ],
+    "successful_models": 3,
+    "total_models": 3,
+    "confidence": 1.0,
+    "individual_results": [
+      {
+        "model": "llama3.2-vision:11b",
+        "data": {
+          "categories": [
+            "Obst",
+            "Gemüse",
+            "Bananen",
+            "Backwaren",
+            "Fleisch",
+            "Joghurt & Desserts",
+            "Äpfel & Birnen",
+            "Getränke"
+          ],
+          "current": "Obst"
+        },
+        "weight": 1.0,
+        "status": "extracted_json"
+      },
+      {
+        "model": "minicpm-v:latest",
+        "data": {
+          "categories": [
+            "Obst",
+            "Gemüse",
+            "Backwaren"
+          ],
+          "current": "Obst"
+        },
+        "weight": 1.2,
+        "status": "extracted_json"
+      },
+      {
+        "model": "moondream:latest",
+        "data": {
+          "categories": [
+            {
+              "name": "Obst",
+              "type": "fruit",
+              "subtype": "apples & pears",
+              "rating": 4.0
+            },
+            {
+              "name": "Gemüse",
+              "type": "vegetables",
+              "subtype": "bananas",
+              "rating": 4.0
+            },
+            {
+              "name": "Bananen",
+              "type": "fruit",
+              "subtype": "bananas",
+              "rating": 4.0
+            },
+            {
+              "name": "Backwaren",
+              "type": "bakery",
+              "subtype": "breads & pastries",
+              "rating": 4.0
+            }
+          ]
+        },
+        "weight": 0.8,
+        "status": "success"
+      }
+    ],
+    "analysis_method": "consensus",
+    "analysis_mode": "ui",
+    "ocr_text": "",
+    "debug": {
+      "all_model_responses": {
+        "llama3.2-vision:11b": {
+          "status": "extracted_json",
+          "raw_response": "The image shows a screenshot of the Flink grocery app navigation. The visible food category names are:\n\n* Obst (fruit)\n* Gemüse (vegetables)\n* Bananen (bananas)\n* Backwaren (bakery)\n* Fleisch (meat)\n* Joghurt & Desserts\n* Äpfel & Birnen (apples & pears)\n* Getränke (drinks)\n\nThe current category is \"Obst\" (fruit).\n\nHere is the JSON format:\n\n{\"categories\": [\"Obst\", \"Gemüse\", \"Bananen\", \"Backwaren\", \"Fleisch\", \"Joghurt & Desserts\", \"Äpfel & Birnen\", \"Getränke\"], \"current\": \"Obst\"}\n\nNote: The JSON format only includes the categories that are visible in the screenshot, and the current category is \"Obst\" (fruit).",
+          "parsed_data": {
+            "categories": [
+              "Obst",
+              "Gemüse",
+              "Bananen",
+              "Backwaren",
+              "Fleisch",
+              "Joghurt & Desserts",
+              "Äpfel & Birnen",
+              "Getränke"
+            ],
+            "current": "Obst"
+          },
+          "processing_time": 29.220975875854492,
+          "parse_status": "extracted_json"
+        },
+        "minicpm-v:latest": {
+          "status": "extracted_json",
+          "raw_response": "Based on the provided screenshot of a Flink grocery app navigation interface with visible food category names in German, here is the requested information:\n\n```json\n{\n  \"categories\": [\n    \"Obst\",\n    \"Gemüse\",\n    \"Backwaren\"\n  ],\n  \"current\": \"Obst\"\n}\n```\n\nThis JSON format represents the categories displayed on the app's navigation screen and indicates that 'Obst' (fruit) is currently selected.",
+          "parsed_data": {
+            "categories": [
+              "Obst",
+              "Gemüse",
+              "Backwaren"
+            ],
+            "current": "Obst"
+          },
+          "processing_time": 14.196107864379883,
+          "parse_status": "extracted_json"
+        },
+        "moondream:latest": {
+          "status": "success",
+          "raw_response": "{\"categories\": [{\"name\": \"Obst\", \"type\": \"fruit\", \"subtype\": \"apples & pears\", \"rating\": 4.0}, \n  {\"name\": \"Gemüse\", \"type\": \"vegetables\", \"subtype\": \"bananas\", \"rating\": 4.0}, \n  {\"name\": \"Bananen\", \"type\": \"fruit\", \"subtype\": \"bananas\", \"rating\": 4.0}, \n  {\"name\": \"Backwaren\", \"type\": \"bakery\", \"subtype\": \"breads & pastries\", \"rating\": 4.0}] }",
+          "parsed_data": {
+            "categories": [
+              {
+                "name": "Obst",
+                "type": "fruit",
+                "subtype": "apples & pears",
+                "rating": 4.0
+              },
+              {
+                "name": "Gemüse",
+                "type": "vegetables",
+                "subtype": "bananas",
+                "rating": 4.0
+              },
+              {
+                "name": "Bananen",
+                "type": "fruit",
+                "subtype": "bananas",
+                "rating": 4.0
+              },
+              {
+                "name": "Backwaren",
+                "type": "bakery",
+                "subtype": "breads & pastries",
+                "rating": 4.0
+              }
+            ]
+          },
+          "processing_time": 2.3243818283081055,
+          "parse_status": "direct_json"
+        }
+      },
+      "prompt_mode": "ui"
+    }
+  }
+}

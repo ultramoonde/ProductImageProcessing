@@ -1,0 +1,162 @@
+{
+  "step": "02_product_canvas_detection",
+  "description": "Detected 4 product canvases (573x813px each)",
+  "content_region": {
+    "x": 0,
+    "y": 531,
+    "width": 1290,
+    "height": 2015
+  },
+  "canvases": [
+    {
+      "canvas_id": 1,
+      "x": 48,
+      "y": 767,
+      "width": 573,
+      "height": 813,
+      "tile_region": {
+        "x": 48,
+        "y": 767,
+        "width": 573,
+        "height": 573
+      },
+      "text_region": {
+        "x": 48,
+        "y": 1340,
+        "width": 573,
+        "height": 240
+      }
+    },
+    {
+      "canvas_id": 2,
+      "x": 669,
+      "y": 767,
+      "width": 573,
+      "height": 813,
+      "tile_region": {
+        "x": 669,
+        "y": 767,
+        "width": 573,
+        "height": 573
+      },
+      "text_region": {
+        "x": 669,
+        "y": 1340,
+        "width": 573,
+        "height": 240
+      }
+    },
+    {
+      "canvas_id": 3,
+      "x": 48,
+      "y": 1700,
+      "width": 573,
+      "height": 813,
+      "tile_region": {
+        "x": 48,
+        "y": 1700,
+        "width": 573,
+        "height": 573
+      },
+      "text_region": {
+        "x": 48,
+        "y": 2273,
+        "width": 573,
+        "height": 240
+      }
+    },
+    {
+      "canvas_id": 4,
+      "x": 669,
+      "y": 1700,
+      "width": 573,
+      "height": 813,
+      "tile_region": {
+        "x": 669,
+        "y": 1700,
+        "width": 573,
+        "height": 573
+      },
+      "text_region": {
+        "x": 669,
+        "y": 2273,
+        "width": 573,
+        "height": 240
+      }
+    }
+  ],
+  "category_data": {
+    "primary_category": "Bananen",
+    "primary_subcategory": "Bananen",
+    "all_categories": [
+      "Bananen",
+      "\u00c4pfel & Birnen"
+    ],
+    "all_subcategories": [
+      "Bananen",
+      "\u00c4pfel & Birnen"
+    ]
+  },
+  "csv_data": [
+    {
+      "product_canvas_id": "IMG_7805_canvas_1",
+      "category": "Bananen",
+      "subcategory": "Bananen",
+      "canvas_x": 48,
+      "canvas_y": 767,
+      "canvas_width": 573,
+      "canvas_height": 813,
+      "source_image": "IMG_7805",
+      "detection_confidence": 0.95,
+      "tile_x": 48,
+      "tile_y": 767,
+      "tile_width": 573,
+      "tile_height": 573
+    },
+    {
+      "product_canvas_id": "IMG_7805_canvas_2",
+      "category": "Bananen",
+      "subcategory": "Bananen",
+      "canvas_x": 669,
+      "canvas_y": 767,
+      "canvas_width": 573,
+      "canvas_height": 813,
+      "source_image": "IMG_7805",
+      "detection_confidence": 0.95,
+      "tile_x": 669,
+      "tile_y": 767,
+      "tile_width": 573,
+      "tile_height": 573
+    },
+    {
+      "product_canvas_id": "IMG_7805_canvas_3",
+      "category": "Bananen",
+      "subcategory": "Bananen",
+      "canvas_x": 48,
+      "canvas_y": 1700,
+      "canvas_width": 573,
+      "canvas_height": 813,
+      "source_image": "IMG_7805",
+      "detection_confidence": 0.95,
+      "tile_x": 48,
+      "tile_y": 1700,
+      "tile_width": 573,
+      "tile_height": 573
+    },
+    {
+      "product_canvas_id": "IMG_7805_canvas_4",
+      "category": "Bananen",
+      "subcategory": "Bananen",
+      "canvas_x": 669,
+      "canvas_y": 1700,
+      "canvas_width": 573,
+      "canvas_height": 813,
+      "source_image": "IMG_7805",
+      "detection_confidence": 0.95,
+      "tile_x": 669,
+      "tile_y": 1700,
+      "tile_width": 573,
+      "tile_height": 573
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "category": "category3",
+  "subcategory": "Milch & Butter",
+  "extraction_method": "consensus_llm",
+  "raw_consensus_result": {
+    "categories": [
+      "category3",
+      "Milch & Butter",
+      "Feinkost",
+      "Joghurt & Desserts",
+      "category1",
+      "category2"
+    ],
+    "successful_models": 3,
+    "total_models": 3,
+    "confidence": 1.0,
+    "individual_results": [
+      {
+        "model": "llama3.2-vision:11b",
+        "data": {
+          "categories": [
+            "Joghurt & Desserts"
+          ],
+          "current": "Joghurt & Desserts"
+        },
+        "weight": 1.0,
+        "status": "extracted_json"
+      },
+      {
+        "model": "minicpm-v:latest",
+        "data": {
+          "categories": [
+            "Milch & Butter",
+            "Joghurt & Desserts",
+            "Feinkost"
+          ],
+          "current": "Joghurt & Desserts"
+        },
+        "weight": 1.2,
+        "status": "extracted_json"
+      },
+      {
+        "model": "moondream:latest",
+        "data": {
+          "categories": [
+            "category1",
+            "category2",
+            "category3"
+          ],
+          "current": "active_category"
+        },
+        "weight": 0.8,
+        "status": "success"
+      }
+    ],
+    "analysis_method": "consensus",
+    "analysis_mode": "ui",
+    "ocr_text": "",
+    "debug": {
+      "all_model_responses": {
+        "llama3.2-vision:11b": {
+          "status": "extracted_json",
+          "raw_response": "The Flink grocery app navigation screenshot shows the following food category names:\n\n- Milch & Butter\n- Naturj\n- Joghurt & Desserts\n- Feinkost\n- Frucht- & Sahnej\n- Milch & Butter\n- Naturj\n- Joghurt & Desserts\n- Fe\n- Fr\n\nThe active category is: Joghurt & Desserts\n\nHere is the JSON output:\n\n{\"categories\": [\"Joghurt & Desserts\"], \"current\": \"Joghurt & Desserts\"}",
+          "parsed_data": {
+            "categories": [
+              "Joghurt & Desserts"
+            ],
+            "current": "Joghurt & Desserts"
+          },
+          "processing_time": 27.22340178489685,
+          "parse_status": "extracted_json"
+        },
+        "minicpm-v:latest": {
+          "status": "extracted_json",
+          "raw_response": "Based on the provided screenshot of a Flink grocery app navigation interface, here is the extracted information in JSON format:\n\n```json\n{\n  \"categories\": [\"Milch & Butter\", \"Joghurt & Desserts\", \"Feinkost\"],\n  \"current\": \"Joghurt & Desserts\"\n}\n```\n\nThis represents the visible food category names and indicates that 'Joghurt & Desserts' is currently selected.",
+          "parsed_data": {
+            "categories": [
+              "Milch & Butter",
+              "Joghurt & Desserts",
+              "Feinkost"
+            ],
+            "current": "Joghurt & Desserts"
+          },
+          "processing_time": 9.422477722167969,
+          "parse_status": "extracted_json"
+        },
+        "moondream:latest": {
+          "status": "success",
+          "raw_response": "{\"categories\":[\"category1\", \"category2\", \"category3\"],\"current\": \"active_category\" }",
+          "parsed_data": {
+            "categories": [
+              "category1",
+              "category2",
+              "category3"
+            ],
+            "current": "active_category"
+          },
+          "processing_time": 5.121493101119995,
+          "parse_status": "direct_json"
+        }
+      },
+      "prompt_mode": "ui"
+    }
+  }
+}

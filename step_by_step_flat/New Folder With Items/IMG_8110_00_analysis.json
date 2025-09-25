@@ -1,0 +1,80 @@
+{
+  "main_category": "\u00c4pfel & Birnen",
+  "active_subcategory": "\u00c4pfel & Birnen",
+  "available_subcategories": [
+    "\u00c4pfel & Birnen",
+    "Joghurt & Desserts",
+    "Vegan & Vegetarisch",
+    "Bio",
+    "Backwaren",
+    "Tiefk\u00fchl",
+    "Fleisch & Fisch",
+    "Gem\u00fcse",
+    "Bananen",
+    "Obst",
+    "Nudeln",
+    "Getr\u00e4nke",
+    "Milchalternativen"
+  ],
+  "header_tabs": [
+    "\u00c4pfel & Birnen",
+    "Joghurt & Desserts",
+    "Vegan & Vegetarisch",
+    "Bio",
+    "Backwaren",
+    "Tiefk\u00fchl",
+    "Fleisch & Fisch",
+    "Gem\u00fcse",
+    "Bananen",
+    "Obst",
+    "Nudeln",
+    "Getr\u00e4nke",
+    "Milchalternativen"
+  ],
+  "canvas_categories": [
+    {
+      "canvas_id": 1,
+      "x": 48,
+      "y": 673,
+      "width": 573,
+      "height": 573,
+      "main_category": "\u00c4pfel & Birnen",
+      "subcategory": "\u00c4pfel & Birnen",
+      "assignment_method": "consensus_based_uniform"
+    },
+    {
+      "canvas_id": 2,
+      "x": 669,
+      "y": 673,
+      "width": 573,
+      "height": 573,
+      "main_category": "\u00c4pfel & Birnen",
+      "subcategory": "\u00c4pfel & Birnen",
+      "assignment_method": "consensus_based_uniform"
+    },
+    {
+      "canvas_id": 3,
+      "x": 48,
+      "y": 1534,
+      "width": 573,
+      "height": 573,
+      "main_category": "\u00c4pfel & Birnen",
+      "subcategory": "\u00c4pfel & Birnen",
+      "assignment_method": "consensus_based_uniform"
+    },
+    {
+      "canvas_id": 4,
+      "x": 669,
+      "y": 1534,
+      "width": 573,
+      "height": 573,
+      "main_category": "\u00c4pfel & Birnen",
+      "subcategory": "\u00c4pfel & Birnen",
+      "assignment_method": "consensus_based_uniform"
+    }
+  ],
+  "total_canvases": 4,
+  "confidence": 0.6666666666666666,
+  "method": "consensus_based_header_analysis",
+  "analysis_source": "consensus_system_v1"
+}

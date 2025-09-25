@@ -1,0 +1,2 @@
+component_id,canvas_id,processing_timestamp,canvas_x,canvas_y,canvas_width,canvas_height,product_image_x,product_image_y,product_image_width,product_image_height,text_area_x,text_area_y,text_area_width,text_area_height,pink_button_detected,pink_button_x,pink_button_y,pink_button_width,pink_button_height,pink_button_center_x,pink_button_center_y,pink_button_confidence
+IMG_7793_component_1,1,2025-09-24T17:49:22.723800,48,1012,573,813,48,1012,1194,975,48,1987,573,240,True,433,1583,96,96,481,1631,0.9017574729191821

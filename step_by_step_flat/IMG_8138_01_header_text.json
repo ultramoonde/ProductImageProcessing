@@ -1,0 +1,190 @@
+{
+  "category": "Gemüse",
+  "subcategory": "Obst (fruit)",
+  "extraction_method": "consensus_llm",
+  "raw_consensus_result": {
+    "categories": [
+      "Gemüse",
+      "Obst (fruit)",
+      "Backwaren (bakery)",
+      "Fleisch",
+      "Backwaren",
+      "Nudeln",
+      "Gemüse (vegetables)",
+      "Bananen (bananas)",
+      "Getränke",
+      "Äpfel & Birnen",
+      "Fleisch (meat)",
+      "Bananen",
+      "Vegan & Vegetarisch",
+      "Obst",
+      "Joghurt & Desserts"
+    ],
+    "successful_models": 3,
+    "total_models": 3,
+    "confidence": 1.0,
+    "individual_results": [
+      {
+        "model": "llama3.2-vision:11b",
+        "data": {
+          "categories": [
+            "Obst",
+            "Gemüse",
+            "Bananen",
+            "Backwaren",
+            "Fleisch",
+            "Joghurt & Desserts",
+            "Äpfel & Birnen",
+            "Getränke"
+          ],
+          "current": "Joghurt & Desserts"
+        },
+        "weight": 1.0,
+        "status": "extracted_json"
+      },
+      {
+        "model": "minicpm-v:latest",
+        "data": {
+          "categories": [
+            "Vegan & Vegetarisch",
+            "Nudeln"
+          ],
+          "current": "Vegan & Vegetarisch"
+        },
+        "weight": 1.2,
+        "status": "extracted_json"
+      },
+      {
+        "model": "moondream:latest",
+        "data": {
+          "categories": [
+            {
+              "name": "Obst (fruit)",
+              "type": "fruit",
+              "subtype": "vegetable",
+              "url": ""
+            },
+            {
+              "name": "Gemüse (vegetables)",
+              "type": "vegetable",
+              "subtype": "vegetable",
+              "url": ""
+            },
+            {
+              "name": "Bananen (bananas)",
+              "type": "fruit",
+              "subtype": "vegetable",
+              "url": ""
+            },
+            {
+              "name": "Backwaren (bakery)",
+              "type": "meat",
+              "subtype": "meat",
+              "url": ""
+            },
+            {
+              "name": "Fleisch (meat)",
+              "type": "meat",
+              "subtype": "meat",
+              "url": ""
+            },
+            {
+              "name": "Joghurt & Desserts",
+              "type": "drinks",
+              "subtype": "drinks",
+              "url": ""
+            }
+          ]
+        },
+        "weight": 0.8,
+        "status": "success"
+      }
+    ],
+    "analysis_method": "consensus",
+    "analysis_mode": "ui",
+    "ocr_text": "",
+    "debug": {
+      "all_model_responses": {
+        "llama3.2-vision:11b": {
+          "status": "extracted_json",
+          "raw_response": "The Flink grocery app navigation screenshot shows the following visible food category names:\n\n* Obst (fruit)\n* Gemüse (vegetables)\n* Bananen (bananas)\n* Backwaren (bakery)\n* Fleisch (meat)\n* Joghurt & Desserts\n* Äpfel & Birnen (apples & pears)\n* Getränke (drinks)\n\nThe current active category is \"Joghurt & Desserts\".\n\nHere is the JSON format with the categories and current category:\n\n{\"categories\": [\"Obst\", \"Gemüse\", \"Bananen\", \"Backwaren\", \"Fleisch\", \"Joghurt & Desserts\", \"Äpfel & Birnen\", \"Getränke\"], \"current\": \"Joghurt & Desserts\"}\n\nNote: The categories are in German, as per the image.",
+          "parsed_data": {
+            "categories": [
+              "Obst",
+              "Gemüse",
+              "Bananen",
+              "Backwaren",
+              "Fleisch",
+              "Joghurt & Desserts",
+              "Äpfel & Birnen",
+              "Getränke"
+            ],
+            "current": "Joghurt & Desserts"
+          },
+          "processing_time": 30.577651977539062,
+          "parse_status": "extracted_json"
+        },
+        "minicpm-v:latest": {
+          "status": "extracted_json",
+          "raw_response": "Based on the provided screenshot from a Flink grocery app navigation interface, here is the information in the requested JSON format:\n\n```json\n{\n  \"categories\": [\"Vegan & Vegetarisch\", \"Nudeln\"],\n  \"current\": \"Vegan & Vegetarisch\"\n}\n```\n\nThis represents the visible food category names and indicates that the current selected category is 'Vegan & Vegetarisch'.",
+          "parsed_data": {
+            "categories": [
+              "Vegan & Vegetarisch",
+              "Nudeln"
+            ],
+            "current": "Vegan & Vegetarisch"
+          },
+          "processing_time": 14.69702410697937,
+          "parse_status": "extracted_json"
+        },
+        "moondream:latest": {
+          "status": "success",
+          "raw_response": "{\"categories\": [{\"name\": \"Obst (fruit)\", \"type\": \"fruit\", \"subtype\": \"vegetable\", \"url\": \"\"}, \n  {\"name\": \"Gemüse (vegetables)\", \"type\": \"vegetable\", \"subtype\": \"vegetable\", \"url\": \"\"}, \n  {\"name\": \"Bananen (bananas)\", \"type\": \"fruit\", \"subtype\": \"vegetable\", \"url\": \"\"}, \n  {\"name\": \"Backwaren (bakery)\", \"type\": \"meat\", \"subtype\": \"meat\", \"url\": \"\"}, \n  {\"name\": \"Fleisch (meat)\", \"type\": \"meat\", \"subtype\": \"meat\", \"url\": \"\"}, \n  {\"name\": \"Joghurt & Desserts\", \"type\": \"drinks\", \"subtype\": \"drinks\", \"url\": \"\"}] }",
+          "parsed_data": {
+            "categories": [
+              {
+                "name": "Obst (fruit)",
+                "type": "fruit",
+                "subtype": "vegetable",
+                "url": ""
+              },
+              {
+                "name": "Gemüse (vegetables)",
+                "type": "vegetable",
+                "subtype": "vegetable",
+                "url": ""
+              },
+              {
+                "name": "Bananen (bananas)",
+                "type": "fruit",
+                "subtype": "vegetable",
+                "url": ""
+              },
+              {
+                "name": "Backwaren (bakery)",
+                "type": "meat",
+                "subtype": "meat",
+                "url": ""
+              },
+              {
+                "name": "Fleisch (meat)",
+                "type": "meat",
+                "subtype": "meat",
+                "url": ""
+              },
+              {
+                "name": "Joghurt & Desserts",
+                "type": "drinks",
+                "subtype": "drinks",
+                "url": ""
+              }
+            ]
+          },
+          "processing_time": 3.0552937984466553,
+          "parse_status": "direct_json"
+        }
+      },
+      "prompt_mode": "ui"
+    }
+  }
+}

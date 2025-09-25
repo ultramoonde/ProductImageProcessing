@@ -1,0 +1,186 @@
+{
+  "category": "Äpfel & Birnen",
+  "subcategory": "Aufschnitt & Brotaufstriche",
+  "extraction_method": "consensus_llm",
+  "raw_consensus_result": {
+    "categories": [
+      "Äpfel & Birnen",
+      "Aufschnitt & Brotaufstriche",
+      "category2",
+      "category3",
+      "Obst",
+      "category5",
+      "category4",
+      "Käse",
+      "Nuss- & Schokoladen",
+      "Getränke",
+      "category1",
+      "Gemüse",
+      "Fleisch",
+      "Aufschlager",
+      "Bananen",
+      "Backwaren",
+      "Joghurt & Desserts"
+    ],
+    "successful_models": 3,
+    "total_models": 3,
+    "confidence": 1.0,
+    "individual_results": [
+      {
+        "model": "llama3.2-vision:11b",
+        "data": {
+          "categories": [
+            "Käse",
+            "Aufschlager",
+            "Nuss- & Schokoladen",
+            "Fleisch",
+            "Joghurt & Desserts",
+            "Obst",
+            "Gemüse",
+            "Bananen",
+            "Backwaren",
+            "Getränke",
+            "Äpfel & Birnen"
+          ],
+          "current": "Käse"
+        },
+        "weight": 1.0,
+        "status": "extracted_json"
+      },
+      {
+        "model": "minicpm-v:latest",
+        "data": {
+          "categories": [
+            "Käse",
+            "Aufschnitt & Brotaufstriche"
+          ],
+          "current": "active_category"
+        },
+        "weight": 1.2,
+        "status": "extracted_json"
+      },
+      {
+        "model": "moondream:latest",
+        "data": {
+          "categories": [
+            {
+              "name": "category1",
+              "type": "fruit",
+              "subtype": "obst",
+              "image": ""
+            },
+            {
+              "name": "category2",
+              "type": "vegetables",
+              "subtype": "gemüse",
+              "image": ""
+            },
+            {
+              "name": "category3",
+              "type": "banneden",
+              "subtype": "bananen",
+              "image": ""
+            },
+            {
+              "name": "category4",
+              "type": "backwaren",
+              "subtype": "banneden",
+              "image": ""
+            },
+            {
+              "name": "category5",
+              "type": "joghurt & dessert",
+              "subtype": "joghurt & dessert",
+              "image": ""
+            }
+          ]
+        },
+        "weight": 0.8,
+        "status": "success"
+      }
+    ],
+    "analysis_method": "consensus",
+    "analysis_mode": "ui",
+    "ocr_text": "",
+    "debug": {
+      "all_model_responses": {
+        "llama3.2-vision:11b": {
+          "status": "extracted_json",
+          "raw_response": "The image shows a Flink grocery app navigation screenshot. The visible food category names are:\n\n* Käse (cheese)\n* Aufschlager (snacks)\n* Nuss- & Schokoladen (nuts & chocolates)\n* Fleisch (meat)\n* Joghurt & Desserts\n* Obst (fruit)\n* Gemüse (vegetables)\n* Bananen (bananas)\n* Backwaren (bakery)\n* Getränke (drinks)\n* Äpfel & Birnen (apples & pears)\n\nThe current category is \"Käse\" (cheese).\n\nHere is the JSON format:\n\n{\"categories\": [\"Käse\", \"Aufschlager\", \"Nuss- & Schokoladen\", \"Fleisch\", \"Joghurt & Desserts\", \"Obst\", \"Gemüse\", \"Bananen\", \"Backwaren\", \"Getränke\", \"Äpfel & Birnen\"], \"current\": \"Käse\"}\n\nNote: The image is in German, so the category names are in German as well.",
+          "parsed_data": {
+            "categories": [
+              "Käse",
+              "Aufschlager",
+              "Nuss- & Schokoladen",
+              "Fleisch",
+              "Joghurt & Desserts",
+              "Obst",
+              "Gemüse",
+              "Bananen",
+              "Backwaren",
+              "Getränke",
+              "Äpfel & Birnen"
+            ],
+            "current": "Käse"
+          },
+          "processing_time": 29.793729066848755,
+          "parse_status": "extracted_json"
+        },
+        "minicpm-v:latest": {
+          "status": "extracted_json",
+          "raw_response": "Based on the provided screenshot of a Flink grocery app navigation menu in German language, here is the extracted information:\n\n```json\n{\n  \"categories\": [\n    \"Käse\",\n    \"Aufschnitt & Brotaufstriche\"\n  ],\n  \"current\": \"active_category\"\n}\n```\n\nNote that I have not included any categories other than those mentioned as they are not visible in the provided image.",
+          "parsed_data": {
+            "categories": [
+              "Käse",
+              "Aufschnitt & Brotaufstriche"
+            ],
+            "current": "active_category"
+          },
+          "processing_time": 12.73222804069519,
+          "parse_status": "extracted_json"
+        },
+        "moondream:latest": {
+          "status": "success",
+          "raw_response": "{\"categories\": [{\"name\": \"category1\", \"type\": \"fruit\", \"subtype\": \"obst\", \"image\": \"\"}, \n  {\"name\": \"category2\", \"type\": \"vegetables\", \"subtype\": \"gemüse\", \"image\": \"\"}, \n  {\"name\": \"category3\", \"type\": \"banneden\", \"subtype\": \"bananen\", \"image\": \"\"}, \n  {\"name\": \"category4\", \"type\": \"backwaren\", \"subtype\": \"banneden\", \"image\": \"\"}, \n  {\"name\": \"category5\", \"type\": \"joghurt & dessert\", \"subtype\": \"joghurt & dessert\", \"image\": \"\"}] }",
+          "parsed_data": {
+            "categories": [
+              {
+                "name": "category1",
+                "type": "fruit",
+                "subtype": "obst",
+                "image": ""
+              },
+              {
+                "name": "category2",
+                "type": "vegetables",
+                "subtype": "gemüse",
+                "image": ""
+              },
+              {
+                "name": "category3",
+                "type": "banneden",
+                "subtype": "bananen",
+                "image": ""
+              },
+              {
+                "name": "category4",
+                "type": "backwaren",
+                "subtype": "banneden",
+                "image": ""
+              },
+              {
+                "name": "category5",
+                "type": "joghurt & dessert",
+                "subtype": "joghurt & dessert",
+                "image": ""
+              }
+            ]
+          },
+          "processing_time": 2.5006141662597656,
+          "parse_status": "direct_json"
+        }
+      },
+      "prompt_mode": "ui"
+    }
+  }
+}

@@ -1,0 +1,736 @@
+#!/usr/bin/env python3
+"""
+Local Consensus Vision Analyzer
+Cost-optimized system using multiple local LLMs with consensus voting + API fallback
+"""
+
+import json
+import requests
+import base64
+import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+import numpy as np
+import cv2
+import easyocr
+import difflib
+import re
+
+class LocalConsensusAnalyzer:
+    """
+    Multi-model consensus analyzer for cost-optimized product analysis.
+    Uses 3 local vision LLMs with 2-out-of-3 consensus voting + API fallback.
+    """
+    
+    def __init__(self, use_api_fallback: bool = True, fallback_provider: str = "openai"):
+        """
+        Initialize the consensus analyzer.
+        
+        Args:
+            use_api_fallback: Whether to use API fallback when consensus fails
+            fallback_provider: "openai" (GPT-4o-mini) or "claude" for API fallback
+        """
+        self.use_api_fallback = use_api_fallback
+        self.fallback_provider = fallback_provider
+        
+        # Initialize OCR reader
+        self.reader = easyocr.Reader(['en', 'de'])
+        
+        # Local models for consensus voting - check what's available
+        available_models = self._check_available_models()
+        
+        # Preferred models for consensus voting
+        preferred_models = [
+            {"name": "llama3.2-vision:11b", "weight": 1.0, "description": "Meta Llama 3.2 Vision 11B"},
+            {"name": "minicpm-v:latest", "weight": 1.2, "description": "MiniCPM-V (best performance/size)"},
+            {"name": "moondream:latest", "weight": 0.8, "description": "Moondream2 (lightweight)"}
+        ]
+        
+        # Use only available models
+        self.local_models = []
+        for model in preferred_models:
+            if model["name"] in available_models:
+                self.local_models.append(model)
+        
+        # Fallback: if no vision models available, try with text-only model for testing
+        if not self.local_models and "llama3.2:3b" in available_models:
+            print("⚠️ No vision models available, using text-only model for basic testing")
+            self.local_models = [
+                {"name": "llama3.2:3b", "weight": 1.0, "description": "Llama 3.2 3B (text-only fallback)"}
+            ]
+        
+        print(f"📋 Available models for consensus: {[m['name'] for m in self.local_models]}")
+        
+        if not self.local_models:
+            print("⚠️ No local models available - will rely on API fallback only")
+        
+        # Stats tracking
+        self.stats = {
+            "total_processed": 0,
+            "local_consensus_success": 0,
+            "api_fallback_used": 0,
+            "cost_saved": 0.0,
+            "processing_times": []
+        }
+        
+        # API configuration for fallback
+        self._setup_api_fallback()
+    
+    def _check_available_models(self) -> List[str]:
+        """Check which models are available in Ollama."""
+        try:
+            import subprocess
+            result = subprocess.run(['ollama', 'list'], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')[1:]  # Skip header
+                available = []
+                for line in lines:
+                    if line.strip():
+                        model_name = line.split()[0]  # First column is model name
+                        available.append(model_name)
+                return available
+            else:
+                print(f"⚠️ Ollama list command failed: {result.stderr}")
+                return []
+                
+        except subprocess.TimeoutExpired:
+            print("⚠️ Ollama list command timed out")
+            return []
+        except Exception as e:
+            print(f"⚠️ Error checking available models: {e}")
+            return []
+        
+    def _setup_api_fallback(self):
+        """Setup API fallback configuration."""
+        if self.fallback_provider == "openai":
+            # GPT-4o-mini: $0.15/1M input, $0.60/1M output (20x cheaper than Claude)
+            self.api_config = {
+                "model": "gpt-4o-mini",
+                "input_cost_per_1m": 0.15,
+                "output_cost_per_1m": 0.60,
+                "base_url": "https://api.openai.com/v1/chat/completions"
+            }
+            # Try to get API key from environment
+            import os
+            self.api_key = os.getenv('OPENAI_API_KEY')
+            
+        elif self.fallback_provider == "claude":
+            self.api_config = {
+                "model": "claude-3-5-haiku-20241022",  # Cheaper than Sonnet
+                "input_cost_per_1m": 0.80,
+                "output_cost_per_1m": 4.00,
+                "base_url": "https://api.anthropic.com/v1/messages"
+            }
+            # Get Claude API key from config
+            try:
+                from vision_api_config import get_vision_api_key
+                claude_key, model = get_vision_api_key()
+                if model == "claude":
+                    self.api_key = claude_key
+            except ImportError:
+                self.api_key = None
+                
+        print(f"✅ API fallback configured: {self.fallback_provider.upper()} ({self.api_config['model']})")
+        if not self.api_key:
+            print("⚠️  Warning: No API key found - API fallback disabled")
+            self.use_api_fallback = False
+    
+    async def analyze_product_with_consensus(self, tile_image: np.ndarray, text_region_image: np.ndarray, analysis_mode: str = "product") -> Dict[str, str]:
+        """
+        Analyze product using local consensus voting with API fallback.
+        
+        Args:
+            tile_image: Product tile image (573x573px)
+            text_region_image: Text region image (660x240px)
+            
+        Returns:
+            Dictionary with product information and consensus metadata
+        """
+        start_time = time.time()
+        self.stats["total_processed"] += 1
+        
+        # Extract OCR text for reference
+        ocr_text = self._extract_ocr_text(text_region_image)
+        print(f"📝 OCR extracted: {ocr_text}")
+        
+        # Step 1: Send to all local models in parallel
+        local_results = await self._query_local_models_parallel(tile_image, text_region_image, ocr_text, analysis_mode)
+        
+        # Step 2: Analyze consensus
+        consensus_result, consensus_confidence = self._analyze_consensus(local_results)
+        
+        # Step 3: Decide on final result
+        if consensus_result and consensus_confidence >= 0.67:  # 2 out of 3 agree
+            print(f"✅ Local consensus achieved ({consensus_confidence:.1%} confidence)")
+            self.stats["local_consensus_success"] += 1
+            self.stats["cost_saved"] += 0.05  # Estimated API cost saved per image
+            
+            result = consensus_result
+            result["analysis_method"] = f"local_consensus_{consensus_confidence:.1%}"
+            
+        elif self.use_api_fallback and self.api_key:
+            print(f"🌐 No local consensus ({consensus_confidence:.1%}), using {self.fallback_provider.upper()} API fallback...")
+            result = await self._api_fallback_analysis(tile_image, text_region_image, ocr_text)
+            result["analysis_method"] = f"{self.fallback_provider}_api_fallback"
+            self.stats["api_fallback_used"] += 1
+            
+        else:
+            print("❌ No consensus and no API fallback - using best local result")
+            result = self._select_best_local_result(local_results)
+            result["analysis_method"] = "local_best_effort"
+        
+        # Add processing stats
+        processing_time = time.time() - start_time
+        self.stats["processing_times"].append(processing_time)
+        result["processing_time_seconds"] = round(processing_time, 2)
+        result["local_results_count"] = len(local_results)
+        result["consensus_confidence"] = round(consensus_confidence, 3)
+        
+        return result
+    
+    async def _query_local_models_parallel(self, tile_image: np.ndarray, text_region_image: np.ndarray, ocr_text: str, analysis_mode: str = "product") -> List[Dict]:
+        """Query all local models in parallel for faster processing."""
+        
+        # Convert images to base64 once
+        tile_base64 = self._image_to_base64(tile_image)
+        text_base64 = self._image_to_base64(text_region_image)
+        
+        # Create tasks for parallel execution
+        tasks = []
+        for model_config in self.local_models:
+            task = self._query_single_local_model(
+                model_config, tile_base64, text_base64, ocr_text, analysis_mode
+            )
+            tasks.append(task)
+        
+        # Execute all queries in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Filter successful results
+        valid_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                print(f"⚠️ Model {self.local_models[i]['name']} failed: {result}")
+            elif result and result.get('product_name'):
+                result['model'] = self.local_models[i]['name']
+                result['model_weight'] = self.local_models[i]['weight']
+                valid_results.append(result)
+        
+        print(f"📊 Got {len(valid_results)}/{len(self.local_models)} successful local model responses")
+        return valid_results
+    
+    async def _query_single_local_model(self, model_config: Dict, tile_base64: str, text_base64: str, ocr_text: str, analysis_mode: str = "product") -> Dict:
+        """Query a single local model via Ollama."""
+        
+        prompt = self._create_local_analysis_prompt(ocr_text, analysis_mode)
+        
+        try:
+            # Use asyncio-friendly request (in practice, we'd use aiohttp)
+            # For now, using synchronous requests but wrapped in executor
+            loop = asyncio.get_event_loop()
+            
+            def make_request():
+                # Check if this is a vision model or text-only model
+                if "vision" in model_config["name"] or "minicpm-v" in model_config["name"] or "moondream" in model_config["name"]:
+                    # Vision model - send images
+                    payload = {
+                        "model": model_config["name"],
+                        "prompt": prompt,
+                        "images": [tile_base64],  # Send only main product tile
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.1,
+                            "top_p": 0.9
+                        }
+                    }
+                else:
+                    # Text-only model - send OCR text in prompt
+                    text_prompt = f"{prompt}\n\nOCR Text to analyze: {ocr_text}"
+                    payload = {
+                        "model": model_config["name"],
+                        "prompt": text_prompt,
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.1,
+                            "top_p": 0.9
+                        }
+                    }
+                
+                response = requests.post(
+                    "http://localhost:11434/api/generate",
+                    json=payload,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result.get('response', '').strip()
+                    return self._parse_model_response(content, model_config["name"])
+                else:
+                    # Enhanced error logging for vision models
+                    error_text = response.text if response.text else "No error message"
+                    if "vision" in model_config["name"] or "minicpm-v" in model_config["name"] or "moondream" in model_config["name"]:
+                        print(f"❌ {model_config['name']} vision query failed: {response.status_code} - {error_text[:200]}")
+                        # Log image data size for debugging
+                        if "images" in payload:
+                            img_sizes = [len(img) for img in payload["images"]]
+                            print(f"   🖼️ Image data sizes: {img_sizes} chars")
+                    raise Exception(f"Ollama API error: {response.status_code}")
+            
+            # Execute in thread pool to avoid blocking
+            with ThreadPoolExecutor() as executor:
+                future = loop.run_in_executor(executor, make_request)
+                return await future
+                
+        except Exception as e:
+            print(f"❌ {model_config['name']} query failed: {e}")
+            return {}
+    
+    def _create_local_analysis_prompt(self, ocr_text: str, analysis_mode: str = "product") -> str:
+        """Create optimized prompt for local models based on analysis mode."""
+
+        if analysis_mode == "ui":
+            # UI analysis mode for category detection from navigation screenshots
+            return f"""Look at this Flink app screenshot. Find all food category names. Return only JSON.
+
+OCR found: "{ocr_text}"
+
+Return JSON:
+{{"categories": ["Obst", "Gemüse", "Bananen"], "current": "Bananen"}}
+
+Find German food categories like:
+- Obst (fruit)
+- Gemüse (vegetables)
+- Bananen (bananas)
+- Backwaren (bakery)
+- Joghurt & Desserts
+- Äpfel & Birnen (apples & pears)
+
+Return only the JSON. No extra text."""
+
+        else:
+            # Product analysis mode (original)
+            return f"""Analyze this Flink food delivery product. Extract key information and return ONLY valid JSON.
+
+OCR text reference: "{ocr_text}"
+
+Return exactly this JSON structure:
+{{
+    "price": "2.79€",
+    "product_name": "Bananen",
+    "brand": "Chiquita",
+    "weight": "5 Stk",
+    "quantity": "5",
+    "unit": "Stk",
+    "price_per_unit": "0.56€/Stk"
+}}
+
+Rules:
+- Look at both product image and text
+- Fix OCR errors (IStk->Stk, Ikg->kg)
+- German brands: Rewe, Bio, Chiquita, Edeka, etc.
+- Clean product names (remove brand/weight)
+- Return ONLY the JSON object
+
+JSON:"""
+    
+    def _parse_model_response(self, content: str, model_name: str) -> Dict[str, str]:
+        """Parse model response to extract structured data with robust JSON handling."""
+        try:
+            # Try direct JSON parsing first
+            if content.strip().startswith('{'):
+                return json.loads(content)
+            
+            # Extract JSON from any text (markdown, extra text, etc.)
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+                
+                # Special handling for moondream JSON issues
+                if "moondream" in model_name:
+                    # Clean common moondream formatting issues
+                    json_str = self._clean_moondream_json(json_str)
+                
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    print(f"❌ {model_name}: JSON parse error: {e}")
+                    # Try regex-based extraction as fallback
+                    return self._regex_fallback_parse(content)
+            
+            # If no JSON found, try regex fallback
+            return self._regex_fallback_parse(content)
+            
+        except Exception as e:
+            print(f"❌ {model_name}: Parse error: {e}")
+            return {}
+    
+    def _clean_moondream_json(self, json_str: str) -> str:
+        """Clean common moondream JSON formatting issues."""
+        # Remove trailing commas
+        json_str = re.sub(r',\s*}', '}', json_str)
+        json_str = re.sub(r',\s*]', ']', json_str)
+        
+        # Fix missing quotes around keys
+        json_str = re.sub(r'(\w+):', r'"\1":', json_str)
+        
+        # Remove extra data after closing brace
+        brace_pos = json_str.rfind('}')
+        if brace_pos != -1:
+            json_str = json_str[:brace_pos + 1]
+            
+        return json_str
+    
+    def _regex_fallback_parse(self, content: str) -> Dict[str, str]:
+        """Extract key information using regex when JSON parsing fails."""
+        result = {}
+        
+        print(f"🔧 Using regex fallback parsing on: {content[:100]}...")
+        
+        # Extract price (€ format)
+        price_match = re.search(r'(\d+[.,]\d+)\s*€', content)
+        if price_match:
+            result['price'] = price_match.group(1).replace(',', '.') + '€'
+        
+        # Extract product name (look for quoted strings or common food terms)
+        name_patterns = [
+            r'"([^"]{3,50})"',  # Quoted strings
+            r'product[_\s]*name[:\s]+([^\n,]+)',  # "product_name: ..."
+            r'name[:\s]+([^\n,]+)',  # "name: ..."
+            r'(Bio\s+[A-Za-z\s]+)',  # Bio products
+            r'([A-Za-z\s]+(?:Bananen|Mango|Avocado|Apfel|Birne)[A-Za-z\s]*)'  # Common fruits
+        ]
+        
+        for pattern in name_patterns:
+            name_match = re.search(pattern, content, re.IGNORECASE)
+            if name_match:
+                name = name_match.group(1).strip()
+                if len(name) >= 3:
+                    result['product_name'] = name
+                    break
+        
+        # Extract brand
+        brand_patterns = [
+            r'brand[:\s]+([^\n,]+)',
+            r'"brand"[:\s]*"([^"]+)"',
+            r'(Bio|Organic|Rewe|Edeka|Alnatura)'  # Common brands
+        ]
+        
+        for pattern in brand_patterns:
+            brand_match = re.search(pattern, content, re.IGNORECASE)
+            if brand_match:
+                brand = brand_match.group(1).strip()
+                if brand and len(brand) >= 2:
+                    result['brand'] = brand
+                    break
+        
+        # Extract weight/quantity
+        weight_patterns = [
+            r'(\d+)\s*(g|kg|ml|l|stk|stück|pcs)',
+            r'weight[:\s]+([^\n,]+)',
+            r'quantity[:\s]+([^\n,]+)'
+        ]
+        
+        for pattern in weight_patterns:
+            weight_match = re.search(pattern, content, re.IGNORECASE)
+            if weight_match:
+                if 'g|kg|ml|l|stk' in pattern:
+                    result['weight'] = weight_match.group(0)
+                else:
+                    result['weight'] = weight_match.group(1).strip()
+                break
+        
+        if result:
+            print(f"🔧 Regex extraction successful: {result}")
+            return result
+        else:
+            print(f"❌ No data extracted via regex")
+            return self._empty_result()
+    
+    def _analyze_consensus(self, results: List[Dict]) -> Tuple[Optional[Dict], float]:
+        """
+        Analyze results for consensus using 2-out-of-3 majority voting.
+        
+        Returns:
+            (consensus_result, confidence_score)
+        """
+        if len(results) < 2:
+            return None, 0.0
+        
+        # Group results by similarity
+        consensus_groups = []
+        
+        for result in results:
+            # Find matching group or create new one
+            matched = False
+            
+            for group in consensus_groups:
+                if self._results_similar(result, group['results'][0]):
+                    group['results'].append(result)
+                    group['weight'] += result.get('model_weight', 1.0)
+                    matched = True
+                    break
+            
+            if not matched:
+                consensus_groups.append({
+                    'results': [result],
+                    'weight': result.get('model_weight', 1.0)
+                })
+        
+        # Find the group with highest weight (consensus)
+        if not consensus_groups:
+            return None, 0.0
+        
+        best_group = max(consensus_groups, key=lambda g: g['weight'])
+        total_weight = sum(g['weight'] for g in consensus_groups)
+        confidence = best_group['weight'] / total_weight
+        
+        if confidence >= 0.67 and len(best_group['results']) >= 2:  # At least 2 models agree
+            # Merge results from consensus group
+            consensus_result = self._merge_consensus_results(best_group['results'])
+            return consensus_result, confidence
+        
+        return None, confidence
+    
+    def _results_similar(self, result1: Dict, result2: Dict, similarity_threshold: float = 0.7) -> bool:
+        """Check if two results are similar enough to be considered consensus."""
+        
+        # Compare product names
+        name1 = result1.get('product_name', '').lower().strip()
+        name2 = result2.get('product_name', '').lower().strip()
+        
+        if name1 and name2:
+            name_similarity = difflib.SequenceMatcher(None, name1, name2).ratio()
+            if name_similarity < similarity_threshold:
+                return False
+        
+        # Compare prices
+        price1 = str(result1.get('price', '')).replace('€', '').replace(',', '.')
+        price2 = str(result2.get('price', '')).replace('€', '').replace(',', '.')
+        
+        if price1 and price2:
+            try:
+                p1 = float(price1)
+                p2 = float(price2)
+                price_diff = abs(p1 - p2) / max(p1, p2)
+                if price_diff > 0.1:  # More than 10% difference
+                    return False
+            except ValueError:
+                pass
+        
+        # Compare brands
+        brand1 = result1.get('brand', '').lower().strip()
+        brand2 = result2.get('brand', '').lower().strip()
+        
+        if brand1 and brand2 and brand1 != brand2:
+            return False
+        
+        return True
+    
+    def _merge_consensus_results(self, results: List[Dict]) -> Dict[str, str]:
+        """Merge results from consensus group to create final result."""
+        merged = {}
+        
+        # For each field, take the most common value or best quality value
+        fields = ['price', 'product_name', 'brand', 'weight', 'quantity', 'unit', 'price_per_unit']
+        
+        for field in fields:
+            values = [r.get(field, '') for r in results if r.get(field)]
+            if values:
+                # Take most common value
+                from collections import Counter
+                most_common = Counter(values).most_common(1)[0][0]
+                if most_common:
+                    merged[field] = most_common
+        
+        return merged
+    
+    def _select_best_local_result(self, results: List[Dict]) -> Dict[str, str]:
+        """Select best result when no consensus is achieved."""
+        if not results:
+            return self._empty_result()
+        
+        # Select result with highest model weight
+        best_result = max(results, key=lambda r: r.get('model_weight', 1.0))
+        return {k: v for k, v in best_result.items() if not k.startswith('model_')}
+    
+    async def _api_fallback_analysis(self, tile_image: np.ndarray, text_region_image: np.ndarray, ocr_text: str) -> Dict[str, str]:
+        """Use API fallback when local consensus fails."""
+        
+        if self.fallback_provider == "openai":
+            return await self._openai_fallback(tile_image, text_region_image, ocr_text)
+        elif self.fallback_provider == "claude":
+            return await self._claude_fallback(tile_image, text_region_image, ocr_text)
+        else:
+            return self._empty_result()
+    
+    async def _openai_fallback(self, tile_image: np.ndarray, text_region_image: np.ndarray, ocr_text: str) -> Dict[str, str]:
+        """GPT-4 mini fallback analysis."""
+        try:
+            tile_base64 = self._image_to_base64(tile_image)
+            text_base64 = self._image_to_base64(text_region_image)
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}"
+            }
+            
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": self._create_api_analysis_prompt(ocr_text)
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{tile_base64}"}
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{text_base64}"}
+                            }
+                        ]
+                    }
+                ],
+                "max_tokens": 300,
+                "temperature": 0.1
+            }
+            
+            loop = asyncio.get_event_loop()
+            
+            def make_api_request():
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=30
+                )
+                return response
+            
+            with ThreadPoolExecutor() as executor:
+                future = loop.run_in_executor(executor, make_api_request)
+                response = await future
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content'].strip()
+                
+                # Parse JSON response
+                try:
+                    return json.loads(content)
+                except json.JSONDecodeError:
+                    return self._parse_model_response(content, "gpt-4o-mini")
+            else:
+                print(f"⚠️ OpenAI API error: {response.status_code}")
+                return self._empty_result()
+                
+        except Exception as e:
+            print(f"⚠️ OpenAI fallback failed: {e}")
+            return self._empty_result()
+    
+    async def _claude_fallback(self, tile_image: np.ndarray, text_region_image: np.ndarray, ocr_text: str) -> Dict[str, str]:
+        """Claude API fallback analysis."""
+        # Similar implementation to OpenAI but with Claude API format
+        # Implementation details would be similar to the existing Claude integration
+        return self._empty_result()  # Placeholder
+    
+    def _create_api_analysis_prompt(self, ocr_text: str) -> str:
+        """Create optimized prompt for API fallback."""
+        return f"""You are analyzing a product from German food delivery app Flink. Extract detailed information from both the product tile image and text region image.
+
+OCR reference text: "{ocr_text}"
+
+Return ONLY valid JSON with this exact structure:
+
+{{
+    "price": "2.79€",
+    "product_name": "Bananen",
+    "brand": "Chiquita", 
+    "weight": "5 Stk",
+    "quantity": "5",
+    "unit": "Stk",
+    "price_per_unit": "0.56€/Stk",
+    "manufacturer": "",
+    "category": "",
+    "additional_info": ""
+}}
+
+CRITICAL RULES:
+1. Analyze BOTH images carefully
+2. Fix OCR errors: IStk->Stk, Ikg->kg, 1309->130 g  
+3. Extract exact price, brand, product name from images
+4. German brands: Rewe, Bio, Chiquita, Edeka, Alnatura
+5. Clean product names (remove brand/weight info)
+6. Calculate price per unit if shown
+7. Return ONLY the JSON object
+
+JSON:"""
+    
+    def _extract_ocr_text(self, text_region_image: np.ndarray) -> str:
+        """Extract OCR text from text region."""
+        try:
+            ocr_results = self.reader.readtext(text_region_image)
+            return ' | '.join([text for _, text, _ in ocr_results])
+        except Exception as e:
+            print(f"⚠️ OCR extraction failed: {e}")
+            return ""
+    
+    def _image_to_base64(self, image: np.ndarray) -> str:
+        """Convert OpenCV image to base64 string."""
+        _, buffer = cv2.imencode('.png', image)
+        return base64.b64encode(buffer).decode('utf-8')
+    
+    def _empty_result(self) -> Dict[str, str]:
+        """Return empty result structure."""
+        return {
+            'price': '',
+            'brand': '',
+            'product_name': '',
+            'weight': '',
+            'quantity': '',
+            'unit': '',
+            'price_per_unit': '',
+            'manufacturer': '',
+            'category': '',
+            'additional_info': '',
+            'analysis_method': 'failed'
+        }
+    
+    def get_processing_stats(self) -> Dict:
+        """Get processing statistics."""
+        avg_time = sum(self.stats["processing_times"]) / len(self.stats["processing_times"]) if self.stats["processing_times"] else 0
+        
+        return {
+            "total_processed": self.stats["total_processed"],
+            "local_consensus_success": self.stats["local_consensus_success"],
+            "local_success_rate": self.stats["local_consensus_success"] / max(self.stats["total_processed"], 1) * 100,
+            "api_fallback_used": self.stats["api_fallback_used"],
+            "api_fallback_rate": self.stats["api_fallback_used"] / max(self.stats["total_processed"], 1) * 100,
+            "estimated_cost_saved": round(self.stats["cost_saved"], 2),
+            "average_processing_time": round(avg_time, 2)
+        }
+    
+    def print_stats_summary(self):
+        """Print processing statistics summary."""
+        stats = self.get_processing_stats()
+
+        print("\n" + "="*50)
+        print("🏆 CONSENSUS ANALYZER PERFORMANCE SUMMARY")
+        print("="*50)
+        print(f"📊 Total processed: {stats['total_processed']}")
+        print(f"✅ Local consensus success: {stats['local_consensus_success']} ({stats['local_success_rate']:.1f}%)")
+        print(f"🌐 API fallback used: {stats['api_fallback_used']} ({stats['api_fallback_rate']:.1f}%)")
+        print(f"💰 Estimated cost saved: ${stats['estimated_cost_saved']:.2f}")
+        print(f"⚡ Average processing time: {stats['average_processing_time']:.2f}s")
+        print("="*50)
+
+
+if __name__ == "__main__":
+    print("LocalConsensusAnalyzer module loaded successfully")

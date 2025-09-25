@@ -1,0 +1,5 @@
+A_FileName,B_ProductImage_Filename,C_Product_Description,D_Product_Price,E_Product_Brand,F_Product_Weight,G_Product_Quantity,H_Cost_per_Kg,I_Cost_per_Piece,J_Product_Category,K_Product_SubCategory,L_BackgroundRemoved_ImagePath
+IMG_7805.PNG,IMG_7805_product_1_original.png,Bananen 5 Stk.,"1,49 €",,,5 Stück,,0.30 €/Stk,Obst,Bananen,background_removed_products/IMG_7805_product_1_no_bg.png
+IMG_7805.PNG,IMG_7805_product_2_original.png,Bananen Chiquita 5 Stk.,"2,79 €",Chiquita,,5 Stück,,0.56 €/Stk,Obst,Bananen,background_removed_products/IMG_7805_product_2_no_bg.png
+IMG_7805.PNG,IMG_7805_product_3_original.png,Apfel Snack Gala 1kg,"4,29 €",,1kg,1,4.29 €/kg,,Obst,Äpfel,background_removed_products/IMG_7805_product_3_no_bg.png
+IMG_7805.PNG,IMG_7805_product_4_original.png,Apfel Pink Lady 1kg,"3,99 €",Pink Lady,1kg,1,3.99 €/kg,,Obst,Äpfel,background_removed_products/IMG_7805_product_4_no_bg.png

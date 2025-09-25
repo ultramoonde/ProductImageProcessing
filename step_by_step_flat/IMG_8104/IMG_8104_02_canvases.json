@@ -1,0 +1,157 @@
+{
+  "step": "02_product_canvas_detection",
+  "description": "Detected 4 product canvases (573x813px each)",
+  "content_region": {
+    "x": 0,
+    "y": 531,
+    "width": 1290,
+    "height": 2015,
+    "detection_method": "computed_from_boundaries"
+  },
+  "canvases": [
+    {
+      "canvas_id": 1,
+      "x": 48,
+      "y": 629,
+      "width": 573,
+      "height": 813,
+      "tile_region": {
+        "x": 48,
+        "y": 629,
+        "width": 573,
+        "height": 573
+      },
+      "text_region": {
+        "x": 48,
+        "y": 1202,
+        "width": 573,
+        "height": 240
+      }
+    },
+    {
+      "canvas_id": 2,
+      "x": 669,
+      "y": 629,
+      "width": 573,
+      "height": 813,
+      "tile_region": {
+        "x": 669,
+        "y": 629,
+        "width": 573,
+        "height": 573
+      },
+      "text_region": {
+        "x": 669,
+        "y": 1202,
+        "width": 573,
+        "height": 240
+      }
+    },
+    {
+      "canvas_id": 3,
+      "x": 48,
+      "y": 1490,
+      "width": 573,
+      "height": 813,
+      "tile_region": {
+        "x": 48,
+        "y": 1490,
+        "width": 573,
+        "height": 573
+      },
+      "text_region": {
+        "x": 48,
+        "y": 2063,
+        "width": 573,
+        "height": 240
+      }
+    },
+    {
+      "canvas_id": 4,
+      "x": 669,
+      "y": 1490,
+      "width": 573,
+      "height": 813,
+      "tile_region": {
+        "x": 669,
+        "y": 1490,
+        "width": 573,
+        "height": 573
+      },
+      "text_region": {
+        "x": 669,
+        "y": 2063,
+        "width": 573,
+        "height": 240
+      }
+    }
+  ],
+  "category_data": {
+    "primary_category": "Obst",
+    "primary_subcategory": "Unknown",
+    "all_categories": [],
+    "all_subcategories": []
+  },
+  "csv_data": [
+    {
+      "product_canvas_id": "IMG_8104_canvas_1",
+      "category": "Obst",
+      "subcategory": "Unknown",
+      "canvas_x": 48,
+      "canvas_y": 629,
+      "canvas_width": 573,
+      "canvas_height": 813,
+      "source_image": "IMG_8104",
+      "detection_confidence": 0.95,
+      "tile_x": 48,
+      "tile_y": 629,
+      "tile_width": 573,
+      "tile_height": 573
+    },
+    {
+      "product_canvas_id": "IMG_8104_canvas_2",
+      "category": "Obst",
+      "subcategory": "Unknown",
+      "canvas_x": 669,
+      "canvas_y": 629,
+      "canvas_width": 573,
+      "canvas_height": 813,
+      "source_image": "IMG_8104",
+      "detection_confidence": 0.95,
+      "tile_x": 669,
+      "tile_y": 629,
+      "tile_width": 573,
+      "tile_height": 573
+    },
+    {
+      "product_canvas_id": "IMG_8104_canvas_3",
+      "category": "Obst",
+      "subcategory": "Unknown",
+      "canvas_x": 48,
+      "canvas_y": 1490,
+      "canvas_width": 573,
+      "canvas_height": 813,
+      "source_image": "IMG_8104",
+      "detection_confidence": 0.95,
+      "tile_x": 48,
+      "tile_y": 1490,
+      "tile_width": 573,
+      "tile_height": 573
+    },
+    {
+      "product_canvas_id": "IMG_8104_canvas_4",
+      "category": "Obst",
+      "subcategory": "Unknown",
+      "canvas_x": 669,
+      "canvas_y": 1490,
+      "canvas_width": 573,
+      "canvas_height": 813,
+      "source_image": "IMG_8104",
+      "detection_confidence": 0.95,
+      "tile_x": 669,
+      "tile_y": 1490,
+      "tile_width": 573,
+      "tile_height": 573
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "category": "Gemüse",
+  "subcategory": "Nudeln",
+  "extraction_method": "consensus_llm",
+  "raw_consensus_result": {
+    "categories": [
+      "Gemüse",
+      "Nudeln",
+      "Joghurt & Desserts",
+      "Äpfel & Birnen",
+      "Getränke",
+      "Obst",
+      "Vegan & Vegetarisch",
+      "Bananen",
+      "Fleisch",
+      "Backwaren"
+    ],
+    "successful_models": 2,
+    "total_models": 3,
+    "confidence": 0.6666666666666666,
+    "individual_results": [
+      {
+        "model": "llama3.2-vision:11b",
+        "data": {
+          "categories": [
+            "Obst",
+            "Gemüse",
+            "Bananen",
+            "Backwaren",
+            "Fleisch",
+            "Joghurt & Desserts",
+            "Äpfel & Birnen",
+            "Getränke"
+          ],
+          "current": "Joghurt & Desserts"
+        },
+        "weight": 1.0,
+        "status": "extracted_json"
+      },
+      {
+        "model": "minicpm-v:latest",
+        "data": {
+          "categories": [
+            "Vegan & Vegetarisch",
+            "Nudeln"
+          ],
+          "current": "Vegan & Vegetarisch"
+        },
+        "weight": 1.2,
+        "status": "extracted_json"
+      }
+    ],
+    "analysis_method": "consensus",
+    "analysis_mode": "ui",
+    "ocr_text": "",
+    "debug": {
+      "all_model_responses": {
+        "llama3.2-vision:11b": {
+          "status": "extracted_json",
+          "raw_response": "The Flink grocery app navigation screenshot shows the following visible food category names:\n\n* Obst (fruit)\n* Gemüse (vegetables)\n* Bananen (bananas)\n* Backwaren (bakery)\n* Fleisch (meat)\n* Joghurt & Desserts\n* Äpfel & Birnen (apples & pears)\n* Getränke (drinks)\n\nThe current active category is \"Joghurt & Desserts\".\n\nHere is the JSON format of the categories and the current active category:\n\n{\"categories\": [\"Obst\", \"Gemüse\", \"Bananen\", \"Backwaren\", \"Fleisch\", \"Joghurt & Desserts\", \"Äpfel & Birnen\", \"Getränke\"], \"current\": \"Joghurt & Desserts\"}\n\nNote: The JSON format only includes the categories and the current active category, as per the instructions.",
+          "parsed_data": {
+            "categories": [
+              "Obst",
+              "Gemüse",
+              "Bananen",
+              "Backwaren",
+              "Fleisch",
+              "Joghurt & Desserts",
+              "Äpfel & Birnen",
+              "Getränke"
+            ],
+            "current": "Joghurt & Desserts"
+          },
+          "processing_time": 28.703763961791992,
+          "parse_status": "extracted_json"
+        },
+        "minicpm-v:latest": {
+          "status": "extracted_json",
+          "raw_response": "Based on the provided screenshot of the Flink grocery app navigation menu, here is the requested information in JSON format:\n\n```json\n{\n  \"categories\": [\n    \"Vegan & Vegetarisch\",\n    \"Nudeln\"\n  ],\n  \"current\": \"Vegan & Vegetarisch\"\n}\n```\n\nNote that some categories might not be fully visible or identifiable from this screenshot, but those listed above are the ones clearly shown.",
+          "parsed_data": {
+            "categories": [
+              "Vegan & Vegetarisch",
+              "Nudeln"
+            ],
+            "current": "Vegan & Vegetarisch"
+          },
+          "processing_time": 12.427327156066895,
+          "parse_status": "extracted_json"
+        },
+        "moondream:latest": {
+          "status": "json_error",
+          "raw_response": "{\"categories\":[\"category1\", \"category2\", \"category3\"],\"current\":\"active_category\"},{\"categories\":[\"obst (fruit)\", \"gemüse (vegetables)\", \"bananen (bananas)\", \"fleisch (meat)\", \"joghurt & desserts (apples & pears)\", \"getränke (drinks)\", \"milchalternthe(milk alternatives)\", \"joght & deses(jogth & desserts)\", \"joght & deses(jogth & desserts)\"],\"active_category\": \"obst (fruit)\", \"milchalternthe(milk alternatives)\", \"joght & deses(jogth & desserts)\"}}",
+          "error": "JSON parse error: Extra data: line 1 column 83 (char 82)",
+          "processing_time": 2.4062650203704834,
+          "parse_status": "json_error"
+        }
+      },
+      "prompt_mode": "ui"
+    }
+  }
+}

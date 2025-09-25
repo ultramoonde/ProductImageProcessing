@@ -1,0 +1,15 @@
+{
+  "total_products_analyzed": 4,
+  "successful_analyses": 0,
+  "category_context": {
+    "main_category": "Unknown",
+    "active_subcategory": "Unknown",
+    "available_subcategories": [],
+    "navigation_text": [
+      "no_text_available"
+    ],
+    "confidence": 0.6,
+    "method": "text_fallback"
+  },
+  "analyzed_products": []
+}

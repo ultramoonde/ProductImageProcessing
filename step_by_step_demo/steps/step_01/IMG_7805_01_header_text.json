@@ -1,0 +1,88 @@
+{
+  "category": "category3",
+  "subcategory": "Gemüse",
+  "extraction_method": "consensus_llm",
+  "raw_consensus_result": {
+    "categories": [
+      "category3",
+      "Gemüse",
+      "Obst",
+      "Backwaren",
+      "category1",
+      "category2"
+    ],
+    "successful_models": 2,
+    "total_models": 3,
+    "confidence": 0.6666666666666666,
+    "individual_results": [
+      {
+        "model": "minicpm-v:latest",
+        "data": {
+          "categories": [
+            "Obst",
+            "Gemüse",
+            "Backwaren"
+          ],
+          "current": "Obst"
+        },
+        "weight": 1.2,
+        "status": "extracted_json"
+      },
+      {
+        "model": "moondream:latest",
+        "data": {
+          "categories": [
+            "category1",
+            "category2",
+            "category3"
+          ],
+          "current": "active_category"
+        },
+        "weight": 0.8,
+        "status": "success"
+      }
+    ],
+    "analysis_method": "consensus",
+    "analysis_mode": "ui",
+    "ocr_text": "",
+    "debug": {
+      "all_model_responses": {
+        "llama3.2-vision:11b": {
+          "status": "connection_error",
+          "raw_response": "Connection failed",
+          "error": "Could not connect to Ollama",
+          "processing_time": 60.00541281700134
+        },
+        "minicpm-v:latest": {
+          "status": "extracted_json",
+          "raw_response": "Based on the provided screenshot of a Flink grocery app navigation interface, here is the requested information in JSON format:\n\n```json\n{\n  \"categories\": [\n    \"Obst\",\n    \"Gemüse\",\n    \"Backwaren\"\n  ],\n  \"current\": \"Obst\"\n}\n```\n\nThis represents the visible food category names and indicates that 'Obst' (fruit) is currently active.",
+          "parsed_data": {
+            "categories": [
+              "Obst",
+              "Gemüse",
+              "Backwaren"
+            ],
+            "current": "Obst"
+          },
+          "processing_time": 19.865317821502686,
+          "parse_status": "extracted_json"
+        },
+        "moondream:latest": {
+          "status": "success",
+          "raw_response": "{\"categories\":[\"category1\", \"category2\", \"category3\"],\"current\": \"active_category\" }",
+          "parsed_data": {
+            "categories": [
+              "category1",
+              "category2",
+              "category3"
+            ],
+            "current": "active_category"
+          },
+          "processing_time": 3.599562168121338,
+          "parse_status": "direct_json"
+        }
+      },
+      "prompt_mode": "ui"
+    }
+  }
+}

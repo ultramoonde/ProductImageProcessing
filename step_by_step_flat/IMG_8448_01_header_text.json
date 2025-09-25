@@ -1,0 +1,107 @@
+{
+  "category": "Schokolade & Kekse",
+  "subcategory": "Fleisch",
+  "extraction_method": "consensus_llm",
+  "raw_consensus_result": {
+    "categories": [
+      "Schokolade & Kekse",
+      "Fleisch",
+      "Süßgebäck",
+      "Schokoknabberei",
+      "Joghurt & Desserts",
+      "Bananen",
+      "Backwaren",
+      "Fruchte",
+      "Getränke",
+      "Obst",
+      "Gemüse",
+      "Äp &  "
+    ],
+    "successful_models": 2,
+    "total_models": 3,
+    "confidence": 0.6666666666666666,
+    "individual_results": [
+      {
+        "model": "llama3.2-vision:11b",
+        "data": {
+          "categories": [
+            "Schokoknabberei",
+            "Fruchte",
+            "Gemüse",
+            "Fleisch",
+            "Joghurt & Desserts",
+            "Getränke",
+            "Obst",
+            "Backwaren",
+            "Bananen",
+            "Äp &  "
+          ],
+          "current": "Schokoknabberei"
+        },
+        "weight": 1.0,
+        "status": "extracted_json"
+      },
+      {
+        "model": "minicpm-v:latest",
+        "data": {
+          "categories": [
+            "Schokolade & Kekse",
+            "Süßgebäck"
+          ],
+          "current": "active_category"
+        },
+        "weight": 1.2,
+        "status": "extracted_json"
+      }
+    ],
+    "analysis_method": "consensus",
+    "analysis_mode": "ui",
+    "ocr_text": "",
+    "debug": {
+      "all_model_responses": {
+        "llama3.2-vision:11b": {
+          "status": "extracted_json",
+          "raw_response": "The Flink grocery app navigation screenshot shows the following food category names:\n\n- Schokoknabberei (chocolate)\n- Fruchte (fruits)\n- Gemüse (vegetables)\n- Fleisch (meat)\n- Joghurt & Desserts\n- Getränke (drinks)\n- Obst (fruit)\n- Backwaren (bakery)\n- Bananen (bananas)\n- Äpfel & Birn (apples & pears)\n\nHere is the JSON output:\n\n{\"categories\": [\"Schokoknabberei\", \"Fruchte\", \"Gemüse\", \"Fleisch\", \"Joghurt & Desserts\", \"Getränke\", \"Obst\", \"Backwaren\", \"Bananen\", \"Äp &  \"], \"current\": \"Schokoknabberei\"}",
+          "parsed_data": {
+            "categories": [
+              "Schokoknabberei",
+              "Fruchte",
+              "Gemüse",
+              "Fleisch",
+              "Joghurt & Desserts",
+              "Getränke",
+              "Obst",
+              "Backwaren",
+              "Bananen",
+              "Äp &  "
+            ],
+            "current": "Schokoknabberei"
+          },
+          "processing_time": 35.14990997314453,
+          "parse_status": "extracted_json"
+        },
+        "minicpm-v:latest": {
+          "status": "extracted_json",
+          "raw_response": "Based on the provided screenshot of a Flink grocery app navigation interface with German language options for food categories, here is the requested information in JSON format:\n\n```json\n{\n  \"categories\": [\n    \"Schokolade & Kekse\",\n    \"Süßgebäck\"\n  ],\n  \"current\": \"active_category\"\n}\n```\n\nThis JSON represents two visible food category names from the app's navigation interface: Schokolade & Kekse (chocolate and cookies) and Süßgebäck (desserts).",
+          "parsed_data": {
+            "categories": [
+              "Schokolade & Kekse",
+              "Süßgebäck"
+            ],
+            "current": "active_category"
+          },
+          "processing_time": 11.817187070846558,
+          "parse_status": "extracted_json"
+        },
+        "moondream:latest": {
+          "status": "json_error",
+          "raw_response": "{\"categories\": [{\"name\": \"category1\", \"type\": \"fruit\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"gemüse (vegetables)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"bananen (bakery)\", \"type\": \"bakery\", \"subcategories\": [{\"name\": \"fleisch (meat)\", \"type\": \"meat\", \"subcategories\": [{\"name\": \"joghurt (drinks)\", \"type\": \"drinks\", \"subcategories\": [{\"name\": \"getränke (apples & pears)\", \"type\": \"apples & pears\", \"subcategories\": [{\"name\": \"Äpfel (apples & pears)\", \"type\": \"apples & pears\", \"subcategories\": [{\"name\": \"âmpfels (apples & pears)\", \"type\": \"apples & pears\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\", \"subcategories\": [{\"name\": \"obst (fruit)\", \"type\": \"vegetables\"}}",
+          "error": "JSON parse error: Expecting ',' delimiter: line 1 column 4265 (char 4264)",
+          "processing_time": 29.58675527572632,
+          "parse_status": "json_error"
+        }
+      },
+      "prompt_mode": "ui"
+    }
+  }
+}

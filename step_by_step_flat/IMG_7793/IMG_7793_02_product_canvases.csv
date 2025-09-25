@@ -1,0 +1,2 @@
+product_canvas_id,category,subcategory,canvas_x,canvas_y,canvas_width,canvas_height,source_image,detection_confidence,tile_x,tile_y,tile_width,tile_height
+IMG_7793_canvas_1,Obst,Unknown,48,1012,573,813,IMG_7793,0.95,48,1012,1194,975

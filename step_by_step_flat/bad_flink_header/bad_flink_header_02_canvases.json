@@ -1,0 +1,19 @@
+{
+  "step": "02_product_canvas_detection",
+  "description": "Detected 0 product canvases (573x813px each)",
+  "content_region": {
+    "x": 0,
+    "y": 475,
+    "width": 1200,
+    "height": 1804,
+    "detection_method": "computed_from_boundaries"
+  },
+  "canvases": [],
+  "category_data": {
+    "primary_category": "Obst",
+    "primary_subcategory": "Unknown",
+    "all_categories": [],
+    "all_subcategories": []
+  },
+  "csv_data": []
+}

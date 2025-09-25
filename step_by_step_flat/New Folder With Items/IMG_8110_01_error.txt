@@ -1,0 +1,3 @@
+Image Error - No Header Found
+Step 0 did not provide valid header region data.
+Skipping further processing for this image.

@@ -1,0 +1,11 @@
+UI COMPATIBILITY ERROR - CANNOT PROCESS
+
+Reason: Critical compatibility issues: Aspect ratio too wide: 2.00 (expected < 0.8 for phone screenshots); Image too small: 800x400 (expected phone screenshot size)
+Details: Found 4 total issues: Header height unusual: 76px (expected 150-250px); Aspect ratio too wide: 2.00 (expected < 0.8 for phone screenshots); Image too small: 800x400 (expected phone screenshot size); Header lacks color variety expected in grocery category tabs
+
+This screenshot has an incompatible UI structure that differs from the expected Flink grocery app layout.
+Expected: Header with categories + Content region with product grid + Optional footer
+Found: Header Present + Content Present
+
+The pipeline is designed for specific grocery app screenshots and cannot process this image correctly.
+Please ensure the image is from the supported app format before processing.

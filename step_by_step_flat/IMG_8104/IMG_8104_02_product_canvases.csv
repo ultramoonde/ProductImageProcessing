@@ -1,0 +1,5 @@
+product_canvas_id,category,subcategory,canvas_x,canvas_y,canvas_width,canvas_height,source_image,detection_confidence,tile_x,tile_y,tile_width,tile_height
+IMG_8104_canvas_1,Obst,Unknown,48,629,573,813,IMG_8104,0.95,48,629,573,573
+IMG_8104_canvas_2,Obst,Unknown,669,629,573,813,IMG_8104,0.95,669,629,573,573
+IMG_8104_canvas_3,Obst,Unknown,48,1490,573,813,IMG_8104,0.95,48,1490,573,573
+IMG_8104_canvas_4,Obst,Unknown,669,1490,573,813,IMG_8104,0.95,669,1490,573,573
