@@ -61,49 +61,98 @@ class LocalConsensusAnalyzer:
             print(f"❌ OCR Error: {e}")
             return ""
 
-    def _create_local_analysis_prompt(self, ocr_text: str, analysis_mode: str) -> str:
-        """Create analysis prompt based on mode (ui/product)."""
-        if analysis_mode == "ui":
-            # UI analysis for category extraction
-            return f"""Look at this Flink grocery app navigation screenshot. Find ALL visible food category names in German.
+    def _create_local_analysis_prompt(self, ocr_text: str, analysis_mode: str, custom_prompt: str = None) -> str:
+        """Create analysis prompt based on mode (ui/product/coordinate_mapping)."""
+        if custom_prompt:
+            return custom_prompt
+        elif analysis_mode == "coordinate_mapping":
+            # This should not happen as coordinate mapping always uses custom prompt
+            return custom_prompt or "Analyze image for coordinate information."
+        elif analysis_mode == "ui":
+            # SIMPLIFIED UI analysis focused on visual hierarchy
+            return f"""Analyze this Flink grocery app header to identify categories.
 
-OCR detected text: "{ocr_text}"
+SIMPLE RULES:
+1. TOP ROW with colored/pink background = MAIN CATEGORY
+2. BOTTOM ROW with bold/centered text = ACTIVE SUBCATEGORY
 
-Extract ACTUAL visible category names. Look for German food categories like:
-- Obst, Gemüse, Bananen, Backwaren, Fleisch & Fisch, Joghurt & Desserts, Äpfel & Birnen, Getränke
-- Vegan & Vegetarisch, Milchalternativen, Bio, Tiefkühl, Nudeln
-- Any other visible German category names in the navigation
+VISUAL LAYOUT:
+- Row 1: "Categories" title
+- Row 2: [Category with pink background] ← MAIN CATEGORY
+- Row 3: [Bold text] [Normal text] [Normal text] ← ACTIVE = bold text
 
-Find the currently highlighted/active category if visible.
+FALLBACK: If you can't determine bold text, return your best guess and mark confidence as low.
 
-Return JSON with REAL category names from the image:
-{{"categories": ["actual_category_1", "actual_category_2", "..."], "current": "currently_active_category_name"}}
+Return JSON exactly like this:
+{{
+  "main_category": "text from pink background row",
+  "active_subcategory": "bold/centered text from bottom row",
+  "available_subcategories": ["all", "visible", "subcategories"],
+  "confidence": "high/medium/low",
+  "fallback_reason": "explanation if confidence is low"
+}}
 
-Extract the actual German category names visible in the image. Do NOT use placeholder names. Return only JSON."""
+EXAMPLES:
+- Pink background "Obst & Gemüse" + bold "Bananen" → main: "Obst & Gemüse", active: "Bananen"
+- Pink background "Konserven, Instantgerichte & Backen" + bold "Back- & Dessertmischungen" → main: "Konserven, Instantgerichte & Backen", active: "Back- & Dessertmischungen"
+
+Only return valid JSON. Focus on the visual styling: pink background = main, bold text = active subcategory."""
 
         else:
-            # Product analysis for product extraction
-            return f"""Analyze this grocery product image. Extract complete product information and return JSON.
+            # Enhanced product analysis for comprehensive extraction
+            return f"""Analyze this German grocery product image and extract ALL information with precise formatting.
 
 OCR detected text: "{ocr_text}"
 
-Extract ALL visible information:
-- Product name (German name as shown)
-- Price (in euros €, including decimals like 1,49 €)
-- Brand name (if visible on product or package)
-- Weight/quantity (kg, g, ml, l, Stk. - look for numbers followed by units)
-- Quantity count (for items sold by pieces like "5 Stk.")
+=== EXTRACTION REQUIREMENTS ===
 
-Examples of expected output:
-- For bananas sold by piece: {{"price": "1,49 €", "product_name": "Bananen", "brand": "Chiquita", "weight": "", "quantity": "5", "unit": "Stk"}}
-- For apples sold by weight: {{"price": "3,99 €", "product_name": "Äpfel Pink Lady", "brand": "Pink Lady", "weight": "1kg", "quantity": "", "unit": "kg"}}
+1. BRAND IDENTIFICATION (CRITICAL):
+   - Look for manufacturer/company names (usually prominent text or first word)
+   - Common German grocery brands: Aurora, Berief, Alnatura, Bio Company, Demeter, Rapunzel, Edeka, Rewe, etc.
+   - Brand vs Product distinction examples:
+     * "Aurora Sonnenstern-Grieß" → brand: "Aurora", product: "Sonnenstern-Grieß"
+     * "Berief Bio Hafer" → brand: "Berief", product: "Bio Hafer"
+     * "Chiquita Bananen" → brand: "Chiquita", product: "Bananen"
+   - Generic terms are NOT brands: "Bio", "Organic", "Classic", "Type 405" are descriptors
+   - If no clear manufacturer visible, use empty string ""
 
-Be thorough - look at both the main product image and any text areas for brand names, measurements, and quantities.
+2. STRICT FORMATTING RULES:
+   - price: Exact format "X,XX €" (German format with comma)
+   - weight: NUMERIC VALUE ONLY (no units) → "0.5", "500", "1"
+   - unit: STANDARDIZED UNITS → "kg", "g", "l", "ml", "Stk"
+   - quantity: COUNT ONLY → "1", "2", "5" (for multipacks, pieces)
 
-Return only JSON format:
-{{"price": "", "product_name": "", "brand": "", "weight": "", "quantity": "", "unit": ""}}
+3. UNIT STANDARDIZATION:
+   - Weight products: Use "kg" for ≥1kg, "g" for <1kg
+   - Liquid products: Use "l" for ≥1l, "ml" for <1l
+   - Count products: Use "Stk" for pieces/items
+   - NEVER mix units in weight field: "0,5kg" → weight: "0.5", unit: "kg"
 
-Extract information from both the image and OCR text. Return only the JSON, no other text."""
+4. PRICE CALCULATION (MANDATORY):
+   - Calculate price per standard unit based on product type:
+   - Weight products → price_per_kg (convert g to kg: 500g = 0.5kg)
+   - Liquid products → price_per_liter (convert ml to l: 500ml = 0.5l)
+   - Count products → price_per_piece
+   - Multipack calculation: "2x1l for 4,16€" → 4.16÷2 = 2.08€/l
+
+=== EXAMPLES ===
+
+German flour product:
+{{"price": "1,69 €", "product_name": "Sonnenstern-Grieß Weichweizen", "brand": "Aurora", "weight": "0.5", "unit": "kg", "quantity": "", "price_per_kg": "3.38", "price_per_piece": "", "price_per_liter": ""}}
+
+Liquid multipack:
+{{"price": "4,16 €", "product_name": "Bio Hafer Barista", "brand": "Berief", "weight": "1", "unit": "l", "quantity": "2", "price_per_kg": "", "price_per_piece": "", "price_per_liter": "2.08"}}
+
+Count product:
+{{"price": "2,99 €", "product_name": "Bananen", "brand": "Chiquita", "weight": "", "unit": "Stk", "quantity": "5", "price_per_kg": "", "price_per_piece": "0.60", "price_per_liter": ""}}
+
+Small weight product:
+{{"price": "0,89 €", "product_name": "Backpulver", "brand": "Dr. Oetker", "weight": "16", "unit": "g", "quantity": "", "price_per_kg": "55.63", "price_per_piece": "", "price_per_liter": ""}}
+
+=== MANDATORY JSON FORMAT ===
+{{"price": "", "product_name": "", "brand": "", "weight": "", "unit": "", "quantity": "", "price_per_kg": "", "price_per_piece": "", "price_per_liter": ""}}
+
+Analyze both the main product image and text areas thoroughly. Extract brand names carefully. Calculate prices accurately. Return ONLY the JSON, no other text."""
 
     def _calculate_cost_metrics(self, product_data: Dict) -> Dict:
         """
@@ -198,24 +247,33 @@ Extract information from both the image and OCR text. Return only the JSON, no o
             "cost_per_piece": cost_per_piece
         }
 
-    async def _query_single_local_model(self, model: Dict, image_base64: str, text_base64: str, ocr_text: str, analysis_mode: str) -> Dict:
+    async def _query_single_local_model(self, model: Dict, image_base64: str, text_base64: str, ocr_text: str, analysis_mode: str, custom_prompt: str = None) -> Dict:
         """Query single Ollama model with proper error handling."""
         model_name = model["name"]
         start_time = time.time()
 
         try:
             # Create appropriate prompt
-            prompt = self._create_local_analysis_prompt(ocr_text, analysis_mode)
+            prompt = self._create_local_analysis_prompt(ocr_text, analysis_mode, custom_prompt)
 
             # Prepare payload for vision models
+            # For product analysis, prioritize text region for better text reading
+            if analysis_mode == "product" and text_base64 != image_base64:
+                # Use text region for product text analysis
+                analysis_image = text_base64
+            else:
+                # Use main image for UI analysis or when no separate text region
+                analysis_image = image_base64
+
             payload = {
                 "model": model_name,
                 "prompt": prompt,
-                "images": [image_base64],
+                "images": [analysis_image],
                 "stream": False,
                 "options": {
                     "temperature": 0.1,
-                    "top_p": 0.9
+                    "top_p": 0.9,
+                    "num_predict": 2048  # Increase token limit for complete JSON responses
                 }
             }
 
@@ -249,6 +307,7 @@ Extract information from both the image and OCR text. Return only the JSON, no o
             if response.status_code == 200:
                 result = response.json()
                 raw_content = result.get('response', '').strip()
+# Debug logging removed
 
                 # Try to parse JSON
                 try:
@@ -262,28 +321,77 @@ Extract information from both the image and OCR text. Return only the JSON, no o
                             "parse_status": "direct_json"
                         }
                     else:
-                        # Extract JSON from text
-                        json_match = re.search(r'\{[^}]*\}', raw_content)
-                        if json_match:
-                            json_str = json_match.group()
-                            parsed_json = json.loads(json_str)
-                            return {
-                                "status": "extracted_json",
-                                "raw_response": raw_content,
-                                "parsed_data": parsed_json,
-                                "processing_time": processing_time,
-                                "parse_status": "extracted_json"
-                            }
-                        else:
-                            return {
-                                "status": "no_json",
-                                "raw_response": raw_content,
-                                "error": "No JSON found in response",
-                                "processing_time": processing_time,
-                                "parse_status": "no_json"
-                            }
+                        # Extract JSON from text with improved regex for nested JSON
+                        # Try to find complete JSON objects with proper nesting
+                        json_matches = []
+
+                        # Try multiple JSON extraction patterns
+                        patterns = [
+                            r'\{(?:[^{}]|{[^{}]*})*\}',  # Handles one level of nesting
+                            r'\{[^}]*\}',  # Simple pattern as fallback
+                            r'\{[^$]*',    # Captures truncated JSON (from { to end of string)
+                        ]
+
+                        for pattern in patterns:
+                            matches = re.findall(pattern, raw_content, re.DOTALL)
+                            for match in matches:
+                                try:
+                                    parsed_json = json.loads(match)
+                                    print(f"   ✅ DEBUG: Successfully extracted JSON: {list(parsed_json.keys())}")
+                                    return {
+                                        "status": "extracted_json",
+                                        "raw_response": raw_content,
+                                        "parsed_data": parsed_json,
+                                        "processing_time": processing_time,
+                                        "parse_status": "extracted_json"
+                                    }
+                                except json.JSONDecodeError as e:
+                                    print(f"   ❌ DEBUG: JSON decode failed for match: '{match[:100]}...' Error: {e}")
+                                    # Try to repair truncated JSON
+                                    if match.startswith('{') and not match.endswith('}'):
+                                        try:
+                                            # Handle common truncation patterns
+                                            repaired = match.rstrip(',').rstrip()
+
+                                            # Fix incomplete field names like "available_s..."
+                                            if '"available_s' in repaired and not repaired.endswith('"'):
+                                                # Find the position and clean up
+                                                pos = repaired.rfind('"available_s')
+                                                if pos != -1:
+                                                    repaired = repaired[:pos].rstrip(',').rstrip()
+
+                                            # Fix incomplete field names like "cate..."
+                                            elif '"cate' in repaired and not repaired.endswith('"'):
+                                                pos = repaired.rfind('"cate')
+                                                if pos != -1:
+                                                    repaired = repaired[:pos].rstrip(',').rstrip()
+
+                                            repaired += '}'
+                                            parsed_json = json.loads(repaired)
+                                            print(f"   🔧 DEBUG: Repaired truncated JSON: {list(parsed_json.keys())}")
+                                            return {
+                                                "status": "extracted_json",
+                                                "raw_response": raw_content,
+                                                "parsed_data": parsed_json,
+                                                "processing_time": processing_time,
+                                                "parse_status": "repaired_json"
+                                            }
+                                        except json.JSONDecodeError:
+                                            print(f"   ❌ DEBUG: JSON repair failed")
+                                            continue
+                                    continue
+
+                        print(f"   🔍 DEBUG: No JSON extracted from content: '{raw_content[:500]}...'")
+                        return {
+                            "status": "no_json",
+                            "raw_response": raw_content,
+                            "error": "No valid JSON found in response",
+                            "processing_time": processing_time,
+                            "parse_status": "no_json"
+                        }
 
                 except json.JSONDecodeError as e:
+                    print(f"   🔍 DEBUG JSON Parse Error for content: '{raw_content[:200]}...'")
                     return {
                         "status": "json_error",
                         "raw_response": raw_content,
@@ -302,14 +410,15 @@ Extract information from both the image and OCR text. Return only the JSON, no o
 
         except Exception as e:
             processing_time = time.time() - start_time
+            print(f"   ⚠️ Exception in {model_name}: {str(e)}")
             return {
                 "status": "exception",
-                "raw_response": "Exception occurred",
+                "raw_response": f"Exception occurred: {str(e)}",
                 "error": str(e),
                 "processing_time": processing_time
             }
 
-    async def analyze_product_with_consensus(self, tile_image: np.ndarray, text_region_image: np.ndarray, analysis_mode: str = "product") -> Dict:
+    async def analyze_product_with_consensus(self, tile_image: np.ndarray, text_region_image: np.ndarray, analysis_mode: str = "product", custom_prompt: str = None) -> Dict:
         """
         Main consensus analysis method - maintains original signature for compatibility.
         Supports both product and UI analysis modes.
@@ -332,16 +441,22 @@ Extract information from both the image and OCR text. Return only the JSON, no o
         # Convert images to base64
         _, buffer = cv2.imencode('.png', tile_image)
         image_base64 = base64.b64encode(buffer).decode('utf-8')
-        text_base64 = image_base64  # Using same image for both
 
-        print(f"🖼️  Image encoded: {len(image_base64)} chars")
+        # Use text_region_image for text analysis (for better OCR/reading)
+        if text_region_image is not None and text_region_image.shape != tile_image.shape:
+            _, text_buffer = cv2.imencode('.png', text_region_image)
+            text_base64 = base64.b64encode(text_buffer).decode('utf-8')
+            print(f"🖼️  Tile image: {len(image_base64)} chars, Text region: {len(text_base64)} chars")
+        else:
+            text_base64 = image_base64  # Fallback to same image if text region not available
+            print(f"🖼️  Using single image: {len(image_base64)} chars")
 
         # Query all models in parallel
         print(f"🔄 Querying {len(self.models)} models in parallel...")
 
         tasks = []
         for model in self.models:
-            task = self._query_single_local_model(model, image_base64, text_base64, ocr_text, analysis_mode)
+            task = self._query_single_local_model(model, image_base64, text_base64, ocr_text, analysis_mode, custom_prompt)
             tasks.append(task)
 
         # Wait for all responses
@@ -376,9 +491,17 @@ Extract information from both the image and OCR text. Return only the JSON, no o
                     # Validate based on analysis mode
                     is_valid = False
                     if analysis_mode == "ui":
-                        # UI mode: look for categories
+                        # UI mode: look for categories OR hierarchy fields
                         if parsed_data.get("categories") and parsed_data["categories"] != ['']:
                             print(f"   ✅ Categories: {parsed_data['categories']}")
+                            is_valid = True
+                        elif parsed_data.get("main_category") or parsed_data.get("active_subcategory"):
+                            print(f"   ✅ Hierarchy: main='{parsed_data.get('main_category')}', active='{parsed_data.get('active_subcategory')}'")
+                            is_valid = True
+                    elif analysis_mode == "coordinate_mapping":
+                        # Coordinate mapping mode: look for category region analysis
+                        if parsed_data.get("category_region_analysis"):
+                            print(f"   ✅ Coordinate mapping data found")
                             is_valid = True
                     else:
                         # Product mode: look for product info
@@ -401,25 +524,67 @@ Extract information from both the image and OCR text. Return only the JSON, no o
         # Create consensus result based on mode
         if successful_results:
             if analysis_mode == "ui":
-                # UI mode: return categories
+                # UI mode: return categories with PROPER MAJORITY VOTING
                 all_categories = []
+                available_subcategories = []
+                visual_hierarchy = None
+
+                # Collect votes for main_category and active_subcategory
+                main_category_votes = {}
+                active_subcategory_votes = {}
+
                 for result in successful_results:
-                    categories = result["data"].get("categories", [])
-                    # Normalize categories - handle both strings and dictionaries
+                    result_data = result["data"]
+
+                    # Vote counting for main_category
+                    if result_data.get("main_category"):
+                        main_cat = result_data.get("main_category").strip()
+                        if main_cat and main_cat not in ["text from pink background row", ""]:  # Filter out template responses
+                            main_category_votes[main_cat] = main_category_votes.get(main_cat, 0) + 1
+
+                    # Vote counting for active_subcategory
+                    if result_data.get("active_subcategory"):
+                        active_sub = result_data.get("active_subcategory").strip()
+                        if active_sub and active_sub not in ["bold/centered text from bottom row", ""]:  # Filter out template responses
+                            active_subcategory_votes[active_sub] = active_subcategory_votes.get(active_sub, 0) + 1
+
+                    # Collect available subcategories and other data
+                    if result_data.get("available_subcategories"):
+                        available_subcategories.extend(result_data.get("available_subcategories", []))
+                    if result_data.get("visual_hierarchy"):
+                        visual_hierarchy = result_data.get("visual_hierarchy")
+
+                    # Also collect categories field for backwards compatibility
+                    categories = result_data.get("categories", [])
                     normalized_categories = []
                     for cat in categories:
                         if isinstance(cat, dict):
-                            # Extract name from dictionary format
                             normalized_categories.append(cat.get("name", str(cat)))
                         else:
-                            # Already a string
                             normalized_categories.append(str(cat))
                     all_categories.extend(normalized_categories)
 
+                # MAJORITY VOTING: Pick the answer with most votes
+                main_category = max(main_category_votes, key=main_category_votes.get) if main_category_votes else None
+                active_subcategory = max(active_subcategory_votes, key=active_subcategory_votes.get) if active_subcategory_votes else None
+
+                # Debug output for vote counts
+                print(f"   🗳️ Main category votes: {main_category_votes}")
+                print(f"   🗳️ Active subcategory votes: {active_subcategory_votes}")
+                if main_category:
+                    print(f"   🏆 Majority winner main: '{main_category}' ({main_category_votes.get(main_category, 0)} votes)")
+                if active_subcategory:
+                    print(f"   🏆 Majority winner active: '{active_subcategory}' ({active_subcategory_votes.get(active_subcategory, 0)} votes)")
+
                 unique_categories = list(set(all_categories))
+                unique_available_subcategories = list(set(available_subcategories)) if available_subcategories else []
 
                 consensus_result = {
                     "categories": unique_categories,
+                    "main_category": main_category,
+                    "active_subcategory": active_subcategory,
+                    "available_subcategories": unique_available_subcategories,
+                    "visual_hierarchy": visual_hierarchy,
                     "successful_models": len(successful_results),
                     "total_models": len(self.models),
                     "confidence": len(successful_results) / len(self.models),
@@ -431,6 +596,22 @@ Extract information from both the image and OCR text. Return only the JSON, no o
 
                 print(f"\n🎯 UI CONSENSUS SUCCESS:")
                 print(f"   ✅ Found {len(unique_categories)} categories: {unique_categories}")
+                if main_category:
+                    print(f"   🏗️ Main category: '{main_category}'")
+                if active_subcategory:
+                    print(f"   🎯 Active subcategory: '{active_subcategory}'")
+                if unique_available_subcategories:
+                    print(f"   📋 Available subcategories: {unique_available_subcategories}")
+                print(f"   📊 {len(successful_results)}/{len(self.models)} models succeeded")
+
+            elif analysis_mode == "coordinate_mapping":
+                # Coordinate mapping mode: return the best coordinate analysis
+                best_result = successful_results[0]  # Take first successful result
+                coordinate_data = best_result["data"]
+                consensus_result = coordinate_data  # Return the coordinate analysis directly
+
+                print(f"\n🎯 COORDINATE MAPPING SUCCESS:")
+                print(f"   ✅ Found coordinate guidance from LLM")
                 print(f"   📊 {len(successful_results)}/{len(self.models)} models succeeded")
 
             else:
@@ -511,6 +692,71 @@ Extract information from both the image and OCR text. Return only the JSON, no o
         }
 
         return consensus_result
+
+    async def analyze_header_coordinates(self, header_image: np.ndarray) -> Dict:
+        """
+        Analyze header image to determine optimal coordinates for category extraction.
+        Uses LLM consensus to identify where category information is located.
+        """
+        coordinate_prompt = """
+You are analyzing a Flink grocery app header screenshot. Your job is to identify WHERE the category hierarchy is visually displayed.
+
+VISUAL HIERARCHY TO IDENTIFY:
+1. **MAIN CATEGORY** = Text with colored/pink background or highlighted appearance
+2. **ACTIVE SUBCATEGORY** = Bold text underneath the main category
+3. **INACTIVE SUBCATEGORIES** = Regular text alongside the active subcategory
+4. **UNSELECTED CATEGORIES** = Regular text on sides (like "Käse", "Fleisch", etc.)
+
+TASK: Find the precise region containing this category hierarchy and provide crop coordinates.
+
+Look specifically for:
+- PINK/COLORED BACKGROUNDS indicating selected main category
+- BOLD TEXT indicating active subcategory
+- TEXT POSITIONING showing category → subcategory relationship
+- The complete category navigation area (not just individual elements)
+
+Respond in this EXACT JSON format:
+
+{
+  "category_region_analysis": {
+    "text_dense_area_description": "describe the visual layout of categories and subcategories",
+    "main_category_visual": {
+      "name": "the category with pink/colored background",
+      "styling": "describe its visual appearance (background color, highlighting)"
+    },
+    "subcategories_visual": {
+      "active_subcategory": "the bold text subcategory name",
+      "inactive_subcategories": ["list", "of", "regular", "text", "subcategories"]
+    },
+    "unselected_categories": ["visible", "side", "categories"],
+    "optimal_crop_region": {
+      "method": "smart_category_focus",
+      "start_percentage": 50,
+      "end_percentage": 100,
+      "reasoning": "captures full category hierarchy including main category and subcategories"
+    },
+    "visual_hierarchy_location": {
+      "main_category_position": "describe where the highlighted main category appears",
+      "subcategory_position": "describe where subcategories appear relative to main category",
+      "complete_navigation_area": "describe the full category navigation region boundaries"
+    }
+  }
+}
+
+CRITICAL: Focus on the VISUAL STYLING (pink backgrounds, bold text) that indicates category selection state. The goal is to capture the complete category navigation hierarchy, not just individual text elements.
+"""
+
+        print("🗺️ COORDINATE MAPPING: Analyzing header for optimal category region...")
+
+        # Use the main consensus method with coordinate-specific prompt
+        result = await self.analyze_product_with_consensus(
+            header_image,
+            header_image,
+            "coordinate_mapping",
+            custom_prompt=coordinate_prompt
+        )
+
+        return result
 
     # Legacy method for backward compatibility
     async def analyze_categories_with_consensus(self, image: np.ndarray) -> Dict:

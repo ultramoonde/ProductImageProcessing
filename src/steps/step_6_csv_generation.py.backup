@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""
+Step 6: CSV Generation & Final Results
+Generates final CSV report and HTML summary from analyzed product data
+"""
+
+import cv2
+import numpy as np
+import json
+import csv
+from pathlib import Path
+from typing import Dict, Any, List
+from datetime import datetime
+
+from src.interfaces import StepInput, StepOutput, CSVGenerationResult
+
+def run(input_data: StepInput) -> StepOutput:
+    """
+    Generate final CSV report and results summary
+
+    Args:
+        input_data: StepInput with analyzed product data
+
+    Returns:
+        StepOutput with CSV file and processing summary
+    """
+    try:
+        # TODO: Extract real logic from step_by_step_pipeline.py _step_06_final_csv_generation
+
+        image_name = input_data.image_name
+        output_dir = input_data.current_image_dir
+
+        # Get analyzed products from previous step
+        analyzed_products = input_data.data.get("analyzed_products", [])
+        consensus_results = input_data.data.get("consensus_results", [])
+
+        # Generate CSV data
+        csv_data = []
+        for product in analyzed_products:
+            row = {
+                "id": product.get("id"),
+                "product_name": product.get("product_name"),
+                "brand": product.get("brand"),
+                "price": product.get("price"),
+                "original_price": product.get("original_price"),
+                "unit": product.get("unit"),
+                "weight_quantity": product.get("weight_quantity"),
+                "description": product.get("description"),
+                "detected_category": product.get("detected_category"),
+                "consensus_confidence": product.get("consensus_confidence"),
+                "models_agreed": product.get("models_agreed"),
+                "total_models": product.get("total_models"),
+                "extraction_timestamp": datetime.now().isoformat()
+            }
+            csv_data.append(row)
+
+        # Processing summary
+        processing_summary = {
+            "total_products_extracted": len(analyzed_products),
+            "high_confidence_extractions": len([p for p in analyzed_products if p.get("consensus_confidence", 0) > 0.8]),
+            "average_confidence": sum(p.get("consensus_confidence", 0) for p in analyzed_products) / len(analyzed_products) if analyzed_products else 0,
+            "processing_timestamp": datetime.now().isoformat(),
+            "source_image": image_name
+        }
+
+        # File paths for results
+        results_files = {
+            "csv_file": None,
+            "json_summary": None,
+            "html_report": None
+        }
+
+        # Save outputs
+        output_files = {}
+        if output_dir:
+            # Save CSV file
+            csv_filename = f"{image_name}_final_results.csv"
+            csv_path = output_dir / csv_filename
+
+            if csv_data:
+                with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                    fieldnames = csv_data[0].keys()
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(csv_data)
+
+                results_files["csv_file"] = str(csv_path)
+                output_files["csv_results"] = str(csv_path)
+
+            # Save JSON summary
+            json_filename = f"{image_name}_processing_summary.json"
+            json_path = output_dir / json_filename
+
+            summary_data = {
+                "processing_summary": processing_summary,
+                "extracted_products": analyzed_products,
+                "consensus_analysis": consensus_results,
+                "file_paths": results_files
+            }
+
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(summary_data, f, indent=2, ensure_ascii=False)
+
+            results_files["json_summary"] = str(json_path)
+            output_files["json_summary"] = str(json_path)
+
+            # Generate simple HTML report (placeholder)
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Product Extraction Results - {image_name}</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    table {{ border-collapse: collapse; width: 100%; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                    th {{ background-color: #f2f2f2; }}
+                    .summary {{ background-color: #e8f4fd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }}
+                </style>
+            </head>
+            <body>
+                <h1>Product Extraction Results</h1>
+                <div class="summary">
+                    <h2>Processing Summary</h2>
+                    <p><strong>Source Image:</strong> {image_name}</p>
+                    <p><strong>Products Extracted:</strong> {processing_summary['total_products_extracted']}</p>
+                    <p><strong>High Confidence:</strong> {processing_summary['high_confidence_extractions']}</p>
+                    <p><strong>Average Confidence:</strong> {processing_summary['average_confidence']:.2f}</p>
+                    <p><strong>Processing Time:</strong> {processing_summary['processing_timestamp']}</p>
+                </div>
+
+                <h2>Extracted Products</h2>
+                <table>
+                    <tr>
+                        <th>ID</th>
+                        <th>Product Name</th>
+                        <th>Brand</th>
+                        <th>Price</th>
+                        <th>Category</th>
+                        <th>Confidence</th>
+                    </tr>
+            """
+
+            for product in analyzed_products:
+                html_content += f"""
+                    <tr>
+                        <td>{product.get('id', '')}</td>
+                        <td>{product.get('product_name', '')}</td>
+                        <td>{product.get('brand', '')}</td>
+                        <td>{product.get('price', '')}</td>
+                        <td>{product.get('detected_category', '')}</td>
+                        <td>{product.get('consensus_confidence', 0):.2f}</td>
+                    </tr>
+                """
+
+            html_content += """
+                </table>
+            </body>
+            </html>
+            """
+
+            html_filename = f"{image_name}_report.html"
+            html_path = output_dir / html_filename
+
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+
+            results_files["html_report"] = str(html_path)
+            output_files["html_report"] = str(html_path)
+
+        return StepOutput(
+            success=True,
+            step_name="CSV Generation",
+            data={
+                "csv_data": csv_data,
+                "processing_summary": processing_summary,
+                "results_files": results_files
+            },
+            output_files=output_files
+        )
+
+    except Exception as e:
+        return StepOutput(
+            success=False,
+            step_name="CSV Generation",
+            errors=[f"CSV generation failed: {str(e)}"]
+        )
