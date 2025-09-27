@@ -69,34 +69,51 @@ class LocalConsensusAnalyzer:
             # This should not happen as coordinate mapping always uses custom prompt
             return custom_prompt or "Analyze image for coordinate information."
         elif analysis_mode == "ui":
-            # SIMPLIFIED UI analysis focused on visual hierarchy
-            return f"""Analyze this Flink grocery app header to identify categories.
+            # ENHANCED UI analysis with multi-check visual hierarchy system
+            return f"""You are analyzing a food delivery app screenshot.
+Your task: extract the **MAIN CATEGORY** and the **ACTIVE SUBCATEGORY** from the header.
 
-SIMPLE RULES:
-1. TOP ROW with colored/pink background = MAIN CATEGORY
-2. BOTTOM ROW with bold/centered text = ACTIVE SUBCATEGORY
+VISUAL HIERARCHY RULES (MULTI-CHECK SYSTEM):
+1. MAIN CATEGORY
+   - Look at the second row beneath the word "Categories".
+   - The element with a **colored/pink background pill** is ALWAYS the MAIN CATEGORY.
+   - Double-check by position: it is left-aligned on that row, surrounded by siblings (other categories with white/grey backgrounds).
+   - Text is usually sentence case (e.g., "Schokolade & Kekse").
 
-VISUAL LAYOUT:
-- Row 1: "Categories" title
-- Row 2: [Category with pink background] ← MAIN CATEGORY
-- Row 3: [Bold text] [Normal text] [Normal text] ← ACTIVE = bold text
+2. ACTIVE SUBCATEGORY
+   - Look at the third row (beneath the main category row).
+   - The **bolded/underlined/darker text** is ALWAYS the ACTIVE SUBCATEGORY.
+   - Other subcategories on the same row are lighter/normal-weight text.
+   - Double-check by position: it appears inline with siblings (e.g., "Müsli- & Proteinriegel" among "Be Backwaren", "Pralinen").
 
-FALLBACK: If you can't determine bold text, return your best guess and mark confidence as low.
+MULTIPLE VISUAL CONFIRMATIONS:
+- Main category must meet BOTH conditions:
+   (a) Pink background + (b) on row 2.
+- Subcategory must meet BOTH conditions:
+   (a) Bold/dark + (b) on row 3.
+- If formatting is unclear, rely on spatial order:
+   row 2 = main, row 3 = sub.
 
-Return JSON exactly like this:
+OUTPUT FORMAT (add available_subcategories for system compatibility):
 {{
-  "main_category": "text from pink background row",
-  "active_subcategory": "bold/centered text from bottom row",
-  "available_subcategories": ["all", "visible", "subcategories"],
-  "confidence": "high/medium/low",
+  "main_category": "TEXT",
+  "active_subcategory": "TEXT",
+  "available_subcategories": ["list", "of", "visible", "subcategories"],
+  "confidence": "high",
   "fallback_reason": "explanation if confidence is low"
 }}
 
 EXAMPLES:
-- Pink background "Obst & Gemüse" + bold "Bananen" → main: "Obst & Gemüse", active: "Bananen"
-- Pink background "Konserven, Instantgerichte & Backen" + bold "Back- & Dessertmischungen" → main: "Konserven, Instantgerichte & Backen", active: "Back- & Dessertmischungen"
+- Pink "Obst & Gemüse" + bold "Bananen" → {{"main_category": "Obst & Gemüse", "active_subcategory": "Bananen", "confidence":"high"}}
+- Pink "Konserven, Instantgerichte & Backen" + bold "Backzutaten" → {{"main_category": "Konserven, Instantgerichte & Backen", "active_subcategory": "Backzutaten", "confidence":"high"}}
 
-Only return valid JSON. Focus on the visual styling: pink background = main, bold text = active subcategory."""
+IMPORTANT:
+- Never confuse product cards (below subcategory row) with categories.
+- Ignore price, brand, or product names.
+- Use redundancy: confirm via color, boldness, row order, and grouping.
+
+TASK:
+Apply these rules to the input image and return ONLY the JSON object."""
 
         else:
             # Enhanced product analysis for comprehensive extraction
@@ -615,10 +632,84 @@ Analyze both the main product image and text areas thoroughly. Extract brand nam
                 print(f"   📊 {len(successful_results)}/{len(self.models)} models succeeded")
 
             else:
-                # Product mode: return weighted consensus of product data
-                # Use the highest weighted successful result
-                best_result = max(successful_results, key=lambda x: x["weight"])
+                # Product mode: return PROPER MAJORITY VOTING consensus
+                # Count votes for each field instead of just picking highest weight
+
+                # Collect votes for key product fields
+                price_votes = {}
+                product_name_votes = {}
+                brand_votes = {}
+
+                for result in successful_results:
+                    result_data = result["data"]
+
+                    # Vote counting for price
+                    if result_data.get("price"):
+                        price = result_data.get("price").strip()
+                        if price and price not in ["", "N/A"]:
+                            price_votes[price] = price_votes.get(price, 0) + 1
+
+                    # Vote counting for product_name
+                    if result_data.get("product_name"):
+                        name = result_data.get("product_name").strip()
+                        if name and len(name) > 3:  # Filter out too short names
+                            product_name_votes[name] = product_name_votes.get(name, 0) + 1
+
+                    # Vote counting for brand
+                    if result_data.get("brand"):
+                        brand = result_data.get("brand").strip()
+                        if brand and brand not in ["", "N/A", "Generic"]:
+                            brand_votes[brand] = brand_votes.get(brand, 0) + 1
+
+                # MAJORITY VOTING: Pick the answer with most votes
+                consensus_price = max(price_votes, key=price_votes.get) if price_votes else ""
+                consensus_name = max(product_name_votes, key=product_name_votes.get) if product_name_votes else ""
+                consensus_brand = max(brand_votes, key=brand_votes.get) if brand_votes else ""
+
+                # Debug output for vote counts
+                print(f"   🗳️ Price votes: {price_votes}")
+                print(f"   🗳️ Product name votes: {product_name_votes}")
+                print(f"   🗳️ Brand votes: {brand_votes}")
+                if consensus_price:
+                    print(f"   🏆 Majority winner price: '{consensus_price}' ({price_votes.get(consensus_price, 0)} votes)")
+                if consensus_name:
+                    print(f"   🏆 Majority winner name: '{consensus_name}' ({product_name_votes.get(consensus_name, 0)} votes)")
+                if consensus_brand:
+                    print(f"   🏆 Majority winner brand: '{consensus_brand}' ({brand_votes.get(consensus_brand, 0)} votes)")
+
+                # Find the result that has the winning consensus data (or closest match)
+                best_result = None
+                best_score = 0
+
+                for result in successful_results:
+                    result_data = result["data"]
+                    score = 0
+
+                    # Score based on matching consensus winners
+                    if result_data.get("price", "").strip() == consensus_price:
+                        score += 3  # Price is most important
+                    if result_data.get("product_name", "").strip() == consensus_name:
+                        score += 2  # Product name is second most important
+                    if result_data.get("brand", "").strip() == consensus_brand:
+                        score += 1  # Brand is least important
+
+                    if score > best_score:
+                        best_score = score
+                        best_result = result
+
+                # Fallback to first result if no good match
+                if not best_result:
+                    best_result = successful_results[0]
+
                 product_data = best_result["data"]
+
+                # Override with consensus winners
+                if consensus_price:
+                    product_data["price"] = consensus_price
+                if consensus_name:
+                    product_data["product_name"] = consensus_name
+                if consensus_brand:
+                    product_data["brand"] = consensus_brand
 
                 # Calculate cost metrics from the extracted data
                 cost_metrics = self._calculate_cost_metrics(product_data)
