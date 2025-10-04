@@ -396,7 +396,7 @@ def _extract_clean_product_images(original_image: np.ndarray, components_data: L
             if step_dir:
                 cv2.imwrite(str(product_path), hole_punched_tile)
 
-            # Extract text region
+            # Extract text region (full)
             text_x = int(component["text_area_x"])
             text_y = int(component["text_area_y"])
             text_width = int(component["text_area_width"])
@@ -408,12 +408,56 @@ def _extract_clean_product_images(original_image: np.ndarray, components_data: L
             if step_dir:
                 cv2.imwrite(str(text_path), text_region)
 
+            # FIX: Dynamically detect text lines from bottom-up to handle variable product name lengths
+            # Product 4 has 1-line name, Products 1-3 have 2-line names
+            # Bottom-up detection ensures we always get the correct per-unit price line
+
+            # Detect all text lines
+            detected_lines = _detect_text_lines_bottom_up(text_region)
+            print(f"      🔍 Detected {len(detected_lines)} text lines in product {i+1}")
+
+            # Extract actual bottom line (per-unit price) - DYNAMIC
+            bottom_region = _extract_bottom_line_crop(text_region, padding=5)
+
+            # Extract actual top line (main price) - DYNAMIC
+            top_region = _extract_top_line_crop(text_region, padding=5)
+
+            # Middle region: everything between top and bottom lines
+            if len(detected_lines) >= 3:
+                # Use detected line positions for middle section
+                top_line = detected_lines[-1]  # Top line (last in reversed list)
+                bottom_line = detected_lines[0]  # Bottom line (first in reversed list)
+                middle_start = top_line['y_end'] + 5
+                middle_end = bottom_line['y_start'] - 5
+                middle_region = text_region[middle_start:middle_end, :]
+            else:
+                # Fallback for products with few lines
+                middle_region = text_region[top_region.shape[0]:-bottom_region.shape[0], :]
+
+            # Save separate regions
+            top_text_filename = f"{name}_component_{i+1}_text_top.png"
+            middle_text_filename = f"{name}_component_{i+1}_text_middle.png"
+            bottom_text_filename = f"{name}_component_{i+1}_text_bottom.png"
+
+            top_text_path = step_dir / top_text_filename if step_dir else top_text_filename
+            middle_text_path = step_dir / middle_text_filename if step_dir else middle_text_filename
+            bottom_text_path = step_dir / bottom_text_filename if step_dir else bottom_text_filename
+
+            if step_dir:
+                cv2.imwrite(str(top_text_path), top_region)
+                cv2.imwrite(str(middle_text_path), middle_region)
+                cv2.imwrite(str(bottom_text_path), bottom_region)
+                print(f"      ✅ Saved text regions: top ({top_region.shape[0]}px), middle ({middle_region.shape[0]}px), bottom ({bottom_region.shape[0]}px) - DYNAMIC")
+
             # Create clean product data entry
             clean_product = {
                 "component_id": component["component_id"],
                 "clean_image_path": str(product_path),
                 "holes_image_path": str(holes_path),  # NEW: hole-punched image path
-                "text_image_path": str(text_path),
+                "text_image_path": str(text_path),  # Full text region (legacy compatibility)
+                "text_top_path": str(top_text_path),  # NEW: Top region for main price (Step 5b)
+                "text_middle_path": str(middle_text_path),  # NEW: Middle region for product name (Step 5a)
+                "text_bottom_path": str(bottom_text_path),  # NEW: Bottom region for per-unit price (Step 5c)
                 "product_region": {
                     "x": product_x, "y": product_y,
                     "width": product_width, "height": product_height
@@ -439,6 +483,106 @@ def _extract_clean_product_images(original_image: np.ndarray, components_data: L
     print(f"   🎉 Successfully extracted {len(clean_products)} clean product images")
     return clean_products
 
+
+def _detect_text_lines_bottom_up(text_region: np.ndarray) -> List[Dict]:
+    """
+    Detect text lines from bottom to top using horizontal projection.
+    Returns list of line regions with their Y coordinates.
+    """
+    # Convert to grayscale
+    gray = cv2.cvtColor(text_region, cv2.COLOR_BGR2GRAY)
+
+    # Apply binary threshold to isolate text
+    _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+
+    # Horizontal projection: sum pixels in each row
+    h_projection = np.sum(binary, axis=1)
+
+    # Find rows with text (non-zero projection)
+    # Use a threshold to ignore noise
+    threshold = np.max(h_projection) * 0.1
+    text_rows = h_projection > threshold
+
+    # Find contiguous text blocks (lines)
+    lines = []
+    in_line = False
+    line_start = 0
+
+    for i, has_text in enumerate(text_rows):
+        if has_text and not in_line:
+            # Start of new line
+            line_start = i
+            in_line = True
+        elif not has_text and in_line:
+            # End of line
+            line_end = i
+            lines.append({
+                'y_start': line_start,
+                'y_end': line_end,
+                'height': line_end - line_start,
+                'center_y': (line_start + line_end) // 2
+            })
+            in_line = False
+
+    # Handle case where last line extends to bottom
+    if in_line:
+        lines.append({
+            'y_start': line_start,
+            'y_end': len(text_rows),
+            'height': len(text_rows) - line_start,
+            'center_y': (line_start + len(text_rows)) // 2
+        })
+
+    # Reverse to get bottom-first order
+    lines.reverse()
+
+    return lines
+
+def _extract_bottom_line_crop(text_region: np.ndarray, padding: int = 10) -> np.ndarray:
+    """
+    Extract the bottom-most text line with padding.
+    Uses bottom-up line detection to find actual last line.
+    """
+    lines = _detect_text_lines_bottom_up(text_region)
+
+    if not lines:
+        # Fallback: return bottom 60px
+        return text_region[-60:, :]
+
+    # Get the bottom-most line (first in reversed list)
+    bottom_line = lines[0]
+
+    # Add padding above and below
+    y_start = max(0, bottom_line['y_start'] - padding)
+    y_end = min(text_region.shape[0], bottom_line['y_end'] + padding)
+
+    # Extract crop
+    crop = text_region[y_start:y_end, :]
+
+    return crop
+
+def _extract_top_line_crop(text_region: np.ndarray, padding: int = 10) -> np.ndarray:
+    """
+    Extract the top-most text line with padding.
+    Uses bottom-up line detection to find actual first line.
+    """
+    lines = _detect_text_lines_bottom_up(text_region)
+
+    if not lines:
+        # Fallback: return top 60px
+        return text_region[0:60, :]
+
+    # Get the top-most line (last in reversed list)
+    top_line = lines[-1]
+
+    # Add padding above and below
+    y_start = max(0, top_line['y_start'] - padding)
+    y_end = min(text_region.shape[0], top_line['y_end'] + padding)
+
+    # Extract crop
+    crop = text_region[y_start:y_end, :]
+
+    return crop
 
 def _remove_pink_button_with_holes(tile_image, component_data):
     """
