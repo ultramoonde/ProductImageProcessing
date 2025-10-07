@@ -159,11 +159,20 @@ class CSVAggregator:
 
         for i, product in enumerate(analyzed_products):
             # Start with product data as base
+            # Extract product_name_raw from nested structure or fallback
+            raw_consensus = product.get("raw_consensus_data", {})
+            product_name_raw = (
+                product.get("product_name_raw", "") or  # Try top level first
+                raw_consensus.get("product_name_raw", "") or  # Try nested structure
+                product.get("product_name", "")  # Ultimate fallback to product_name
+            )
+
             merged_product = {
                 # Basic product information
                 "product_id": product.get("product_id", f"{self.image_name}_product_{i+1}"),
                 "product_number": product.get("product_number", i+1),
-                "product_name": product.get("product_name", ""),
+                "product_name_raw": product_name_raw,  # NEW: Raw product name with brand
+                "product_name": product.get("product_name", ""),  # Clean product name (brand removed)
                 "brand": product.get("brand", ""),
                 "price": product.get("price", ""),
                 "original_price": product.get("original_price", ""),
@@ -258,7 +267,7 @@ class CSVAggregator:
         if not data:
             # Create empty CSV with headers
             headers = [
-                "product_id", "product_number", "product_name", "brand", "price", "original_price",
+                "product_id", "product_number", "product_name_raw", "product_name", "brand", "price", "original_price",
                 "unit", "weight_quantity", "price_per_kg", "price_per_piece", "price_per_liter",
                 "description", "main_category", "active_subcategory", "category_confidence",
                 "category_method", "consensus_confidence", "models_agreed", "total_models",
@@ -277,7 +286,7 @@ class CSVAggregator:
         # Reorder columns for better readability
         column_order = [
             # Product identification
-            "product_id", "product_number", "product_name", "brand",
+            "product_id", "product_number", "product_name_raw", "product_name", "brand",
 
             # Pricing & quantity
             "price", "original_price", "unit", "weight_quantity",

@@ -54,9 +54,9 @@ class PipelineConfig:
     enable_visualization: bool = True
     enable_html_report: bool = True
     consensus_models: List[str] = field(default_factory=lambda: [
-        'llama3.2-vision:11b',
+        'qwen2.5vl:7b',
         'minicpm-v:latest',
-        'moondream:latest'
+        'llava-llama3:latest'
     ])
     background_removal_enabled: bool = True
     debug_mode: bool = False

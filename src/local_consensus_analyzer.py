@@ -42,10 +42,10 @@ class LocalConsensusAnalyzer:
         # Working models with proper weights
         self.models = [
             {
-                "name": "llama3.2-vision:11b",
-                "weight": 1.0,
-                "timeout": 90,  # Longer timeout for large model
-                "max_retries": 2,  # Fewer retries since it's expensive
+                "name": "qwen2.5vl:7b",
+                "weight": 1.2,  # Highest weight - excellent OCR
+                "timeout": 60,  # Fast, 2024 model optimized for text
+                "max_retries": 3,  # Standard retries
                 "warmup_priority": 1  # Load first
             },
             {
@@ -62,8 +62,8 @@ class LocalConsensusAnalyzer:
                 "max_retries": 3,  # Standard retries
                 "warmup_priority": 3  # Load third
             }
-            # Replaced moondream:latest with llava-llama3:latest for better JSON adherence
-            # Now have 3 reliable instruction-tuned vision models for robust consensus
+            # Using qwen2.5vl:7b (2024 model, excellent OCR), minicpm-v, llava-llama3
+            # All models ~5-6GB, fast and reliable for product text extraction
         ]
 
         print("🔧 INTEGRATED CONSENSUS SYSTEM INITIALIZED")
@@ -73,6 +73,10 @@ class LocalConsensusAnalyzer:
         self.debug_logs = []
         self.debug_output_dir = None
         self.current_product_id = None
+
+        # Keep-alive mechanism for connection stability
+        self.last_query_time = {}  # Track last query time per model
+        self.keep_alive_interval = 30  # Ping every 30 seconds
 
         # Initialize models with smart pre-loading
         self._initialize_model_system()
@@ -462,6 +466,79 @@ class LocalConsensusAnalyzer:
             return response.status_code == 200
         except:
             return False
+
+    async def _ensure_model_loaded(self, model_name: str):
+        """
+        Ensure model is loaded with keep-alive ping.
+        Prevents model unloading between queries.
+        """
+        current_time = time.time()
+        last_query = self.last_query_time.get(model_name, 0)
+
+        # If more than keep_alive_interval seconds since last query, send keep-alive ping
+        if current_time - last_query > self.keep_alive_interval:
+            try:
+                ping_payload = {
+                    "model": model_name,
+                    "prompt": "keepalive",
+                    "stream": False,
+                    "keep_alive": "60m"  # Request 60min keep-alive
+                }
+                requests.post(
+                    "http://localhost:11434/api/generate",
+                    json=ping_payload,
+                    timeout=5
+                )
+                print(f"   🏓 Keep-alive ping sent to {model_name}")
+            except:
+                pass  # Ignore ping failures
+
+        self.last_query_time[model_name] = current_time
+
+    async def _query_model_with_retry(self, model_name: str, image: np.ndarray,
+                                      prompt: str, max_retries: int = 3,
+                                      timeout: int = 30, step_id: str = "unknown") -> str:
+        """
+        Query model with automatic retry on timeout.
+        Implements exponential backoff and keep-alive.
+        """
+        for attempt in range(max_retries):
+            try:
+                # Ensure model is loaded before query
+                await self._ensure_model_loaded(model_name)
+
+                # Execute query
+                response_text = await self._query_model_simple(
+                    model_name, image, prompt, timeout, step_id
+                )
+
+                if response_text and len(response_text.strip()) > 0:
+                    return response_text
+
+                # Empty response = retry
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    print(f"      ⏳ Empty response, retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** (attempt + 1)
+                    print(f"      ⏰ {type(e).__name__}, retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    print(f"      ❌ Failed after {max_retries} attempts")
+                    return ""
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"      ⚠️  Error: {str(e)[:50]}, retrying...")
+                    await asyncio.sleep(2)
+                else:
+                    print(f"      ❌ Failed: {str(e)[:50]}")
+                    return ""
+
+        return ""
 
     def _extract_visual_features(self, image: np.ndarray) -> str:
         """Extract basic visual description for LLM context (no OCR)."""
@@ -985,29 +1062,29 @@ Example 3 - Per-unit pricing "25,50 €/kg" visible:
             "warning": None
         }
 
-        # 🎯 TECHNIQUE 1: Gentle clearing (preferred)
+        # 🎯 TECHNIQUE 1: Aggressive clearing (to prevent contamination)
         try:
-            gentle_payload = {
+            aggressive_payload = {
                 "model": model_name,
-                "prompt": "New analysis session starting.",
+                "prompt": "CLEAR ALL CONTEXT. NEW SESSION. FORGET ALL PREVIOUS PRODUCTS.",
                 "stream": False,
-                "keep_alive": "30s",  # Keep loaded but refresh context
-                "options": {"temperature": 0.1, "num_predict": 5}
+                "keep_alive": "5s",  # Brief keep-alive to force context reset
+                "options": {"temperature": 0.1, "num_predict": 5, "num_ctx": 2048}
             }
 
             response = requests.post(
                 "http://localhost:11434/api/generate",
-                json=gentle_payload,
+                json=aggressive_payload,
                 timeout=3
             )
 
             if response.status_code == 200:
-                print(f"✅ {model_name} gentle clearing successful")
-                clearing_result.update({"cleared": True, "method": "gentle"})
+                print(f"✅ {model_name} aggressive clearing successful")
+                clearing_result.update({"cleared": True, "method": "aggressive"})
                 return clearing_result
 
         except Exception as e:
-            print(f"⚠️ {model_name} gentle clearing failed: {str(e)}")
+            print(f"⚠️ {model_name} aggressive clearing failed: {str(e)}")
 
         # 🎯 TECHNIQUE 2: Medium clearing (fallback)
         try:
@@ -2170,6 +2247,127 @@ Raw text:"""
             print(f"   ❌ Step 5a failed: {str(e)}")
             return {}
 
+    def _is_valid_product_name(self, response: str, prompt: str) -> bool:
+        """
+        Validate if LLM response is a real product name vs prompt/explanation/refusal.
+
+        Returns:
+            True if response appears to be a valid product name
+            False if response is prompt echo, explanation, refusal, or error
+        """
+        if not response or len(response.strip()) < 3:
+            return False
+
+        response_lower = response.lower()
+
+        # Reject explicit refusals - improved to catch all variations
+        refusal_indicators = [
+            "i'm sorry",      # Catches "I'm sorry, I'm not able...", "I'm sorry, but I can't..."
+            "i can't",        # Catches "I can't extract...", "I can't do that"
+            "i cannot",       # Catches "I cannot help"
+            "i'm not able",   # Catches "I'm not able to do that"
+            "unable to",
+            "sorry",          # Broader catch for polite refusals
+            "error:",
+            "http",
+            "timeout"
+        ]
+        if any(indicator in response_lower for indicator in refusal_indicators):
+            return False
+
+        # Reject explanations (contain markdown, numbered lists, or prompt keywords)
+        explanation_indicators = [
+            "**",  # Markdown bold
+            "- **",  # Markdown list with bold
+            "extraction rules",
+            "to extract",
+            "follow these steps",
+            "brand prefix",
+            "quantity information",
+            "ignore price"
+        ]
+        if any(indicator in response_lower for indicator in explanation_indicators):
+            return False
+
+        # Reject if response contains significant portions of the prompt
+        # (>50% of response matches prompt words)
+        prompt_words = set(prompt.lower().split())
+        response_words = set(response.lower().split())
+        if len(response_words) > 0:
+            overlap = len(prompt_words & response_words) / len(response_words)
+            if overlap > 0.5:
+                return False
+
+        # Reject if too long (product names shouldn't exceed 150 chars)
+        if len(response) > 150:
+            return False
+
+        # Reject if contains multiple newlines (explanations)
+        if response.count('\n') > 2:
+            return False
+
+        return True
+
+    def _is_valid_price(self, response: str) -> bool:
+        """
+        Validate if LLM response is a valid price.
+
+        Returns:
+            True if response appears to be a valid price (e.g., "1,69 €")
+            False if response is refusal, explanation, or invalid format
+        """
+        import re
+
+        if not response or len(response.strip()) < 3:
+            return False
+
+        response_lower = response.lower()
+
+        # Reject refusals and errors
+        if any(x in response_lower for x in ["can't", "cannot", "error", "http", "timeout"]):
+            return False
+
+        # Reject explanations
+        if any(x in response for x in ["**", "- **", "The price is"]):
+            return False
+
+        # Reject if too long (price should be < 15 chars)
+        if len(response) > 15:
+            return False
+
+        # Must contain digits
+        if not re.search(r'\d', response):
+            return False
+
+        return True
+
+    def _is_valid_brand(self, response: str) -> bool:
+        """
+        Validate if LLM response is a valid brand name.
+
+        Returns:
+            True if response appears to be a valid brand name
+            False if response is refusal, explanation, or invalid
+        """
+        if not response or len(response.strip()) < 2:
+            return False
+
+        response_lower = response.lower()
+
+        # Reject refusals and errors
+        if any(x in response_lower for x in ["can't", "cannot", "error", "http", "timeout"]):
+            return False
+
+        # Reject explanations
+        if any(x in response for x in ["**", "- **"]):
+            return False
+
+        # Reject if too long (brands should be < 50 chars)
+        if len(response) > 50:
+            return False
+
+        return True
+
     async def _step_5a_detect_product_name(self, tile_image: np.ndarray, text_region_image: np.ndarray) -> Dict:
         """
         Step 5a: Product Name Detection - Single focused visual task
@@ -2178,95 +2376,366 @@ Raw text:"""
         print("   🏷️ Detecting product name from images...")
 
         # ✅ CLAUDE.MD COMPLIANT - NO OCR/REGEX - LLM CONSENSUS ONLY ✅
-        product_name_prompt = """
-ONLY look at the MIDDLE rows with product text. IGNORE the top price row.
-
-Extract COMPLETE product name including:
-- Brand prefixes: "Dr.", "Prof.", etc.
-- Full product name
-- Quantity info: "3er Pack", "89g für 500ml", "500g"
-
-Examples:
-- "Dr. Oetker Puddingpulver Vanille Geschmack 3er Pack"
-- "Mondamin Grießbrei Klassische Art 89g für 500 ml"
-
-CRITICAL RULES:
-- IGNORE price numbers like "1,09 €" completely
-- ONLY extract the product description text
-- Include ALL words from brand to quantity
+        # Ultra-simple prompt - no examples to prevent contamination
+        product_name_prompt = """Extract the complete product name text from the middle section of this image.
+Ignore all prices and price per unit information.
+Return ONLY the product name text (including brand, description, and quantity).
 
 Product name:"""
 
         try:
-            # Use working model for product name detection
-            best_model = "minicpm-v:latest"
+            # Multi-model consensus for product name detection
+            # Using 3 fast, reliable vision models (replaced slow llama3.2-vision:11b with llava:latest)
+            all_models = ["qwen2.5vl:7b", "minicpm-v:latest", "llava-llama3:latest"]
+            product_names = []
 
-            # Send only the text region image for clean text extraction
-            response = await self._query_model_simple(best_model, text_region_image, product_name_prompt, timeout=20, step_id="5a_product_name")
+            print(f"      🔍 Querying {len(all_models)} models for consensus...")
 
-            if response and len(response.strip()) > 2:
-                product_name = response.strip().strip('"')
-                print(f"      ✅ Product name detected: {product_name}")
+            # Query models sequentially with retry logic
+            for model_name in all_models:
+                try:
+                    print(f"      🤖 Querying {model_name}...")
+                    response = await self._query_model_with_retry(
+                        model_name, text_region_image, product_name_prompt,
+                        max_retries=3, timeout=20, step_id="5a_product_name"
+                    )
+
+                    if response and len(response.strip()) > 2:
+                        clean_name = response.strip().strip('"')
+
+                        # Strip common preambles from LLM responses
+                        preambles = [
+                            "the product name is:",
+                            "product name:",
+                            "the product is:",
+                            "product:",
+                            "name:",
+                        ]
+                        clean_name_lower = clean_name.lower()
+                        for preamble in preambles:
+                            if clean_name_lower.startswith(preamble):
+                                clean_name = clean_name[len(preamble):].strip().strip('"').strip()
+                                break
+
+                        # Strip common badges/labels that confuse brand extraction
+                        badges_to_remove = [
+                            "best value",
+                            "sale",
+                            "new",
+                            "aktuelle",
+                            "aktion",
+                            "angebot"
+                        ]
+                        clean_name_lower = clean_name.lower()
+                        for badge in badges_to_remove:
+                            if clean_name_lower.startswith(badge):
+                                clean_name = clean_name[len(badge):].strip()
+                                print(f"      🏷️ Stripped badge '{badge}' from product name")
+                                break
+
+                        # Validate response before adding to consensus
+                        if self._is_valid_product_name(clean_name, product_name_prompt):
+                            product_names.append(clean_name)
+                            print(f"      ✅ {model_name}: {clean_name[:60]}...")
+                        else:
+                            print(f"      ❌ {model_name} INVALID (refusal/prompt/explanation): {clean_name[:80]}...")
+                    else:
+                        print(f"      ❌ {model_name} returned empty")
+
+                    # Small delay between models
+                    await asyncio.sleep(0.5)
+
+                except Exception as e:
+                    print(f"      ❌ {model_name} failed: {str(e)[:50]}...")
+
+            # Fuzzy Consensus: Group similar responses to handle OCR variations
+            if product_names:
+                from collections import Counter
+                from difflib import SequenceMatcher
+
+                def similarity(a: str, b: str) -> float:
+                    """Calculate string similarity ratio (0.0 to 1.0)"""
+                    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+                # Group similar responses (>85% similarity threshold)
+                grouped_responses = []
+                for name in product_names:
+                    # Check if this name is similar to any existing group
+                    added_to_group = False
+                    for group in grouped_responses:
+                        if similarity(name, group[0]) > 0.85:
+                            group.append(name)
+                            added_to_group = True
+                            break
+
+                    if not added_to_group:
+                        grouped_responses.append([name])
+
+                # Find largest group
+                largest_group = max(grouped_responses, key=len)
+
+                # CRITICAL FIX: Vote on first word (brand name) before picking shortest
+                # This prevents picking truncated responses with wrong brand names
+                if len(largest_group) > 1:
+                    from collections import Counter
+
+                    # Extract first word from each response (the brand name)
+                    first_words = [name.split()[0] if name.split() else name for name in largest_group]
+                    word_counts = Counter(first_words)
+                    most_common_first_word, vote_count = word_counts.most_common(1)[0]
+
+                    # Filter to responses that start with the majority first word
+                    correct_brand_responses = [name for name in largest_group if name.split()[0] == most_common_first_word]
+
+                    # NOW pick shortest from the correctly branded responses
+                    product_name = min(correct_brand_responses, key=len)
+
+                    print(f"      🗳️  First word voting: '{most_common_first_word}' won {vote_count}/{len(largest_group)} votes")
+                    if len(correct_brand_responses) < len(largest_group):
+                        rejected = len(largest_group) - len(correct_brand_responses)
+                        print(f"      🚫 Rejected {rejected} response(s) with minority first word")
+                else:
+                    # Only one response in group, use it
+                    product_name = largest_group[0]
+
+                frequency = len(largest_group)
+
+                confidence = 0.95 if frequency >= 2 else 0.75
+                similar_variations = f" (grouped {len(largest_group)} similar responses)" if len(largest_group) > 1 else ""
+                print(f"      ✅ CONSENSUS product name: {product_name} (agreement: {frequency}/{len(product_names)} models){similar_variations}")
 
                 return {
                     'success': True,
                     'product_name': product_name,
-                    'source_model': best_model,
-                    'confidence': 0.8
+                    'source_model': f"consensus_{frequency}_models",
+                    'confidence': confidence
                 }
             else:
-                print(f"      ❌ No product name found")
+                print(f"      ❌ No valid product name found by any model (all responses filtered)")
                 return {}
 
         except Exception as e:
             print(f"      ❌ Product name detection failed: {str(e)[:50]}...")
             return {}
 
+    def _extract_brand_from_product_text(self, text: str) -> str:
+        """
+        Extract brand from LLM response, handling multi-word brands intelligently.
+
+        Strategy: Take first 1-3 words based on capitalization patterns.
+        Stop at first lowercase word (assumes brand is title case).
+
+        Examples:
+        - "Aurora Sonnenstern-Grieß" → "Aurora"
+        - "Dr. Oetker Puddingpulver" → "Dr. Oetker"
+        - "Original Wagner Pizza" → "Original Wagner"
+        - "REWE Beste Wahl Nudeln" → "REWE Beste Wahl"
+        """
+        import re
+
+        text = text.strip()
+
+        # Remove quantity patterns at end (e.g., "1kg", "500g", "x3", "3er Pack")
+        text = re.sub(r'\s+\d+[a-zA-Z]*$', '', text)  # "1kg", "500g"
+        text = re.sub(r'\s+x\d+$', '', text)  # "x3"
+        text = re.sub(r'\s+\d+er\s+Pack$', '', text, flags=re.IGNORECASE)  # "3er Pack"
+
+        words = text.split()
+
+        if not words:
+            return text
+
+        first_two = ' '.join(words[:2]).lower() if len(words) >= 2 else ''
+        first_three = ' '.join(words[:3]).lower() if len(words) >= 3 else ''
+
+        # Pattern 1: Period brands (Dr. Oetker)
+        if words[0].endswith('.') and len(words) > 1:
+            return f"{words[0]} {words[1]}"
+
+        # Pattern 2: Known two-word brand patterns
+        known_two_word = ['original wagner', 'uncle ben', 'beste wahl']
+        if first_two in known_two_word:
+            return ' '.join(words[:2])
+
+        # Pattern 3: Three-word patterns (REWE Beste Wahl, Edeka Gut & Günstig)
+        if 'beste wahl' in first_three:
+            return ' '.join(words[:3]) if words[0].lower() in ['rewe', 'edeka'] else ' '.join(words[:2])
+
+        if len(words) >= 3 and words[1] in ['&', 'und']:
+            # "EDEKA Gut & Günstig" or "Ben & Jerry's"
+            return ' '.join(words[:3])
+
+        # Pattern 4: Conservative multi-word extraction based on capitalization
+        # Take words while they start with capital letters
+        brand_words = [words[0]]  # Always take first word
+
+        for i in range(1, min(len(words), 4)):  # Check up to 3 more words
+            word = words[i]
+
+            # Stop at lowercase words (unless possessive like "Ben's")
+            if word[0].islower() and not word.endswith("'s"):
+                break
+
+            # Stop at common descriptor words
+            descriptor_words = ['pizza', 'mehl', 'nudeln', 'kuchen', 'sauce', 'käse']
+            if word.lower() in descriptor_words:
+                break
+
+            brand_words.append(word)
+
+        # If we got multiple capitalized words, return them
+        if len(brand_words) > 1:
+            return ' '.join(brand_words)
+
+        # Default: first word
+        return words[0]
+
+    def _normalize_brand_name(self, brand_name: str) -> str:
+        """
+        Normalize brand name capitalization using known brand mappings.
+        Handles multi-word brands and expands truncated brand names.
+        """
+        # Brand normalization mapping (lowercase → proper capitalization)
+        # IMPORTANT: Maps incomplete brands to complete multi-word forms
+        brand_mappings = {
+            # Single word brands
+            'ja!': 'Ja!',
+            'ja': 'Ja!',
+            'rewe': 'REWE',
+            'aurora': 'Aurora',
+            'mondamin': 'Mondamin',
+            'iglo': 'Iglo',
+            'alnatura': 'Alnatura',
+            'edeka': 'EDEKA',
+            'maggi': 'Maggi',
+            'knorr': 'Knorr',
+
+            # Multi-word brands - complete forms
+            'dr. oetker': 'Dr. Oetker',
+            'dr oetker': 'Dr. Oetker',
+            'rewe beste wahl': 'REWE Beste Wahl',
+            'rewe best wahl': 'REWE Beste Wahl',
+            'beste wahl': 'Beste Wahl',
+            'edeka gut & günstig': 'EDEKA Gut & Günstig',
+
+            # Multi-word brands - EXPANSION MAPPINGS (incomplete → complete)
+            # This fixes LLM truncation issues
+            'wagner': 'Original Wagner',  # Expand "Wagner" → "Original Wagner"
+            'original wagner': 'Original Wagner',  # Also normalize complete form
+            "uncle ben": "Uncle Ben's",
+            "uncle ben's": "Uncle Ben's",
+            "uncle bens": "Uncle Ben's",
+
+            # Possessive forms
+            "kellogg's": "Kellogg's",
+            "kelloggs": "Kellogg's",
+        }
+
+        brand_lower = brand_name.lower().strip()
+        normalized = brand_mappings.get(brand_lower)
+
+        if normalized:
+            return normalized
+
+        # If not in mapping, return title case version
+        return brand_name.strip()
+
     async def _step_5e_detect_brand(self, tile_image: np.ndarray, text_region_image: np.ndarray) -> Dict:
         """
-        Step 5d: Brand Detection - Single focused visual task
-        Find the brand name from images using visual analysis.
+        Step 5e: Brand Detection - Two-step visual + text validation approach
+        1. Identify brand visually from product image (logo, colors, design)
+        2. Validate that brand name appears in product text
+
+        This prevents badges like "Best value" from being mistaken as brands.
         """
         print("   🏢 Detecting brand from images...")
 
         # ✅ CLAUDE.MD COMPLIANT - NO OCR/REGEX - LLM CONSENSUS ONLY ✅
+        # NEW: Two-step approach - visual brand identification + text validation
+        # EXPLICIT multi-word brand instruction to prevent truncation
         brand_prompt = """
-What is the CORE BRAND NAME only? NO product descriptions.
+Look at this product packaging and identify the COMPLETE BRAND name.
 
-Examples:
-- "Dr. Oetker" (NOT "Dr. Oetker Puddingpulver")
-- "Mondamin" (NOT "Mondamin Lieblings-Milchreis")
-- "Coca-Cola" (NOT "Coca-Cola Zero Sugar")
+IMPORTANT: Many brands have multiple words. Return the COMPLETE brand name.
+- If you see "Original Wagner", return "Original Wagner" NOT just "Wagner"
+- If you see "Uncle Ben's", return "Uncle Ben's" NOT just "Uncle Ben"
+- If you see "REWE Beste Wahl", return "REWE Beste Wahl" NOT just "REWE"
+- If you see "Dr. Oetker", return "Dr. Oetker" NOT just "Oetker"
 
-Extract only the main company/manufacturer name.
-DO NOT include product names, flavors, or descriptions.
+Look for:
+1. Brand logo or brand text on the packaging
+2. Brand design elements
+3. Distinctive brand colors
+
+Return the COMPLETE brand name exactly as shown on the packaging.
+Do NOT abbreviate or truncate multi-word brand names.
+IGNORE badges like "Best value", "Sale", "Angebot" - these are NOT brands.
 
 Brand:"""
 
         try:
-            # Use working model for brand detection
-            best_model = "minicpm-v:latest"
+            # Multi-model consensus for brand detection
+            all_models = ["qwen2.5vl:7b", "minicpm-v:latest", "llava-llama3:latest"]
+            brand_responses = []
 
-            # Send the actual product images for brand detection
-            response = await self._query_model_simple(best_model, tile_image, brand_prompt, timeout=20, step_id="5e_brand")
+            print(f"      🔍 Querying {len(all_models)} models for consensus...")
 
-            if response and len(response.strip()) > 2:
-                brand_name = response.strip().strip('"')
-                print(f"      ✅ Brand detected: {brand_name}")
+            # Query models sequentially with retry logic
+            # NEW: Use FULL product image (tile_image) to see brand logo/visual identity
+            for model_name in all_models:
+                try:
+                    print(f"      🤖 Querying {model_name}...")
+                    response = await self._query_model_with_retry(
+                        model_name, tile_image, brand_prompt,  # Changed from text_region_image to tile_image
+                        max_retries=3, timeout=20, step_id="5e_brand"
+                    )
+
+                    if response and len(response.strip()) > 2:
+                        raw_brand = response.strip().strip('"')
+
+                        # Validate response before extraction
+                        if not self._is_valid_brand(raw_brand):
+                            print(f"      ❌ {model_name} INVALID brand: {raw_brand[:40]}...")
+                            continue
+
+                        # Extract brand using Brand-Description-Quantity pattern
+                        extracted_brand = self._extract_brand_from_product_text(raw_brand)
+                        brand_responses.append(extracted_brand)
+                        print(f"      ✅ {model_name}: {raw_brand[:40]}... → Extracted: {extracted_brand}")
+                    else:
+                        print(f"      ❌ {model_name} returned empty")
+
+                    # Small delay between models
+                    await asyncio.sleep(0.5)
+
+                except Exception as e:
+                    print(f"      ❌ {model_name} failed: {str(e)[:50]}...")
+
+            # Consensus: Use most common extracted brand
+            if brand_responses:
+                from collections import Counter
+                brand_counts = Counter(brand_responses)
+                brand_name, frequency = brand_counts.most_common(1)[0]
+
+                # Normalize brand capitalization
+                brand_name = self._normalize_brand_name(brand_name)
+
+                confidence = 0.95 if frequency >= 2 else 0.75
+                print(f"      ✅ CONSENSUS brand: {brand_name} (agreement: {frequency}/{len(brand_responses)} models)")
 
                 return {
                     'success': True,
                     'brand': brand_name,
-                    'source_model': best_model,
-                    'confidence': 0.8
+                    'source_model': f"consensus_{frequency}_models",
+                    'confidence': confidence
                 }
             else:
-                print(f"      ❌ No brand found")
-                return {}
+                print(f"      ⚠️  No brand found by any model")
+                return {'success': False}
 
         except Exception as e:
             print(f"      ❌ Brand detection failed: {str(e)[:50]}...")
-            return {}
+            return {'success': False}
 
     async def _step_5d_detect_quantity(self, tile_image: np.ndarray, text_region_image: np.ndarray) -> Dict:
         """
@@ -2344,24 +2813,66 @@ TOP ROW ONLY. Return just the price.
 Price:"""
 
         try:
-            # Use working model (minicpm-v was working in the test output)
-            best_model = "minicpm-v:latest"
+            import re
 
-            # Send the text region image for price detection (contains pricing text)
-            response = await self._query_model_simple(best_model, text_region_image, price_prompt, timeout=20, step_id="5b_price")
+            # Multi-model consensus for main price detection
+            all_models = ["qwen2.5vl:7b", "minicpm-v:latest", "llava-llama3:latest"]
+            price_responses = []
 
-            if response and len(response.strip()) > 2:
-                detected_price = response.strip()
-                print(f"      ✅ Main price detected: {detected_price}")
+            print(f"      🔍 Querying {len(all_models)} models for consensus...")
+
+            # Query models sequentially with retry logic
+            for model_name in all_models:
+                try:
+                    print(f"      🤖 Querying {model_name}...")
+                    response = await self._query_model_with_retry(
+                        model_name, text_region_image, price_prompt,
+                        max_retries=3, timeout=20, step_id="5b_price"
+                    )
+
+                    if response and len(response.strip()) > 2:
+                        detected_price = response.strip()
+
+                        # Validate response before normalization
+                        if not self._is_valid_price(detected_price):
+                            print(f"      ❌ {model_name} INVALID price: {detected_price[:40]}...")
+                            continue
+
+                        # Normalize price format before consensus
+                        if '€' in detected_price:
+                            detected_price = re.sub(r'(\d+,\d{2})\s*€', r'\1 €', detected_price)
+                        else:
+                            if re.match(r'^\d+,\d{2}$', detected_price):
+                                detected_price = f"{detected_price} €"
+
+                        price_responses.append(detected_price)
+                        print(f"      ✅ {model_name}: {detected_price}")
+                    else:
+                        print(f"      ❌ {model_name} returned empty")
+
+                    # Small delay between models
+                    await asyncio.sleep(0.5)
+
+                except Exception as e:
+                    print(f"      ❌ {model_name} failed: {str(e)[:50]}...")
+
+            # Consensus: Use most common normalized price
+            if price_responses:
+                from collections import Counter
+                price_counts = Counter(price_responses)
+                main_price, frequency = price_counts.most_common(1)[0]
+
+                confidence = 0.95 if frequency >= 2 else 0.85
+                print(f"      ✅ CONSENSUS main price: {main_price} (agreement: {frequency}/{len(price_responses)} models)")
 
                 return {
                     'success': True,
-                    'main_price': detected_price,
-                    'source_model': best_model,
-                    'confidence': 0.9
+                    'main_price': main_price,
+                    'source_model': f"consensus_{frequency}_models",
+                    'confidence': confidence
                 }
             else:
-                print(f"      ❌ No price found by {best_model}")
+                print(f"      ❌ No price found by any model")
                 return {}
 
         except Exception as e:
@@ -2384,18 +2895,31 @@ Price:"""
             "substeps": []
         }
 
-        # ✅ STEP 5c-1: Extract bottom pricing line as TEXT (simple OCR task)
+        # ✅ STEP 5c-1: Extract bottom pricing line as TEXT with CHARACTER-LEVEL ACCURACY
         text_extraction_prompt = """
-Read ONLY the very LAST/BOTTOM line of text in this image.
+🔍 CRITICAL OCR TASK - READ EXACTLY WHAT YOU SEE
 
-CRITICAL: Read ONLY the bottom-most line. Ignore all text above it.
-
-This bottom line shows per-unit pricing like:
+Look at the BOTTOM LINE ONLY. This shows price per unit like:
 - "3,38 € / 1kg"
-- "0,36 € / 1Stk"
 - "1,79 € / 1l"
+- "0,36 € / 1Stk"
 
-Return ONLY that exact bottom line text. Nothing else.
+RULES FOR READING THE UNIT LETTERS AFTER "/ 1":
+1. Look at the 2-3 letters IMMEDIATELY AFTER "/ 1"
+2. Read EXACTLY what you see - don't guess or infer
+3. Common units you might see:
+   - "kg" (has K and G letters - weight unit)
+   - "l" (single L letter - volume unit)
+   - "Stk" (three letters S-T-K - piece unit)
+
+CRITICAL: Do NOT infer unit from product type!
+- If you see the letter "l" alone, write "l"
+- If you see "kg" letters, write "kg"
+- If you see "Stk" letters, write "Stk"
+
+READ the actual text characters. DO NOT guess based on product.
+
+Return ONLY the exact bottom line text. Nothing else.
 
 Bottom line text:"""
 
@@ -2404,16 +2928,24 @@ Bottom line text:"""
             import re
 
             # STEP 5c-1: Extract bottom line text using multi-model consensus
-            all_models = ["llama3.2-vision:11b", "minicpm-v:latest", "llava-llama3:latest"]
+            all_models = ["qwen2.5vl:7b", "minicpm-v:latest", "llava-llama3:latest"]
             all_text_responses = {}
             extracted_texts = []
 
-            print(f"      🔍 Step 5c-1: Extracting bottom line text from all models...")
+            print(f"      🔍 Step 5c-1: Extracting bottom line text from all models (SEQUENTIAL)...")
 
+            # Query models SEQUENTIALLY with retry logic to prevent Ollama overload
             for model_name in all_models:
                 try:
-                    response = await self._query_model_simple(model_name, text_region_image, text_extraction_prompt, timeout=20, step_id="5c1_text_extraction")
+                    # Use retry wrapper instead of simple query
+                    response = await self._query_model_with_retry(
+                        model_name, text_region_image, text_extraction_prompt,
+                        max_retries=3, timeout=20, step_id="5c1_text_extraction"
+                    )
                     all_text_responses[model_name] = response
+
+                    # Small delay between models to prevent overload
+                    await asyncio.sleep(0.5)
 
                     if response and len(response.strip()) > 3:
                         # Clean up response (remove quotes, extra spaces)
@@ -2432,24 +2964,74 @@ Bottom line text:"""
                 print(f"      ❌ No models successfully extracted text")
                 return {'success': False, 'debug_all_responses': all_text_responses}
 
-            # Use consensus on extracted text (pick most common or longest if no consensus)
+            # VALIDATION: Check all extracted texts for obvious unit patterns
+            # This catches cases where models disagree but the text clearly shows the unit
+            all_text_combined = ' '.join([t['text'] for t in extracted_texts])
+
+            # Strong unit detection patterns (case-insensitive)
+            if re.search(r'€\s*/\s*1\s*kg', all_text_combined, re.IGNORECASE):
+                forced_unit = 'kg'
+                print(f"      🎯 FORCED UNIT DETECTION: Found 'kg' in text responses")
+            elif re.search(r'€\s*/\s*1\s*l\b', all_text_combined, re.IGNORECASE):  # \b for word boundary
+                forced_unit = 'l'
+                print(f"      🎯 FORCED UNIT DETECTION: Found 'l' in text responses")
+            elif re.search(r'€\s*/\s*1\s*[Ss]tk', all_text_combined, re.IGNORECASE):
+                forced_unit = 'Stk'
+                print(f"      🎯 FORCED UNIT DETECTION: Found 'Stk' in text responses")
+            else:
+                forced_unit = None
+
+            # Use consensus on extracted text with UNIT-SPECIFIC VOTING
             from collections import Counter
+            import re
             text_counts = Counter([t['text'] for t in extracted_texts])
 
             if text_counts:
-                # If we have consensus (2+ models agree), use that
+                # If we have consensus (2+ models agree on full text), use that
                 most_common_text, frequency = text_counts.most_common(1)[0]
 
                 if frequency >= 2:
                     pricing_line = most_common_text
                     print(f"      ✅ Text consensus: '{pricing_line}' ({frequency}/{len(extracted_texts)} models)")
                 else:
-                    # No consensus - pick the longest text (likely most complete)
-                    pricing_line = max(extracted_texts, key=lambda x: len(x['text']))['text']
-                    print(f"      ⚠️ No text consensus - using longest: '{pricing_line}'")
+                    # NO CONSENSUS ON FULL TEXT - Use UNIT-SPECIFIC VOTING instead of longest text
+                    print(f"      ⚠️  No full text consensus, using unit-specific voting...")
+
+                    # Extract just the unit from each response
+                    units_only = []
+                    for text_resp in extracted_texts:
+                        # Try to find unit after "€ / 1" or "€/1"
+                        match = re.search(r'€\s*/\s*1\s*([a-zA-Z]+)', text_resp['text'])
+                        if match:
+                            unit_extracted = match.group(1)
+                            units_only.append({
+                                'unit': unit_extracted,
+                                'full_text': text_resp['text'],
+                                'model': text_resp['model']
+                            })
+                            print(f"         - {text_resp['model']}: unit '{unit_extracted}'")
+
+                    if units_only:
+                        # Vote on units only
+                        unit_counts = Counter([u['unit'] for u in units_only])
+                        most_common_unit, unit_frequency = unit_counts.most_common(1)[0]
+
+                        print(f"      🗳️  Unit voting: {dict(unit_counts)}")
+                        print(f"      ✅ Winner unit: '{most_common_unit}' ({unit_frequency}/{len(units_only)} models)")
+
+                        # Find the text response that contains this winning unit
+                        for u in units_only:
+                            if u['unit'] == most_common_unit:
+                                pricing_line = u['full_text']
+                                print(f"      📝 Using text from {u['model']}: '{pricing_line}'")
+                                break
+                    else:
+                        # Couldn't extract units - fallback to first response
+                        pricing_line = extracted_texts[0]['text']
+                        print(f"      ⚠️  No units extracted, using first: '{pricing_line}'")
             else:
                 pricing_line = extracted_texts[0]['text']
-                print(f"      ⚠️ Using first extraction: '{pricing_line}'")
+                print(f"      ⚠️  Using first extraction: '{pricing_line}'")
 
             # STEP 5c-2: Parse text to extract unit after "€ / 1"
             print(f"      🔍 Step 5c-2: Parsing unit from text...")
@@ -2481,8 +3063,14 @@ Bottom line text:"""
 
                 normalized_unit = valid_units.get(extracted_unit_raw)
 
-                if normalized_unit:
+                # OVERRIDE: If forced_unit was detected from combined text, use that instead
+                if forced_unit:
+                    normalized_unit = forced_unit
+                    print(f"      ✅ UNIT DETECTED: {normalized_unit} (from '{pricing_line}') - VALIDATED by forced detection")
+                elif normalized_unit:
                     print(f"      ✅ UNIT DETECTED: {normalized_unit} (from '{pricing_line}')")
+
+                if normalized_unit:
                     return {
                         'success': True,
                         'unit': normalized_unit,
@@ -2500,6 +3088,19 @@ Bottom line text:"""
                     }
             else:
                 print(f"      ❌ Could not find '€ / 1X' pattern in: '{pricing_line}'")
+
+                # FALLBACK: Use forced_unit if we detected it earlier
+                if forced_unit:
+                    print(f"      🎯 FALLBACK: Using forced unit detection: {forced_unit}")
+                    return {
+                        'success': True,
+                        'unit': forced_unit,
+                        'confidence': 0.85,  # Lower confidence since pattern match failed
+                        'extracted_text': pricing_line,
+                        'debug_all_text_responses': all_text_responses,
+                        'debug_note': 'Used forced unit detection as fallback'
+                    }
+
                 return {
                     'success': False,
                     'extracted_text': pricing_line,
@@ -2524,12 +3125,14 @@ Look ONLY at the BOTTOM/LAST row. Extract the price per {unit_type}.
 CRITICAL: Extract ONLY the price portion (X,XX €) BEFORE the "/" symbol.
 
 VALID format: "X,XX €"
-INVALID: "The price is 3,38 €", "250,96 €", "1,69 €" without unit
+INVALID: "The price is X,XX €", explanations, or missing unit context
 
-Examples:
-- "25,69 € / 1kg" → {{"price_per_unit": "25,69 €"}}
-- "3,38 € / 1l" → {{"price_per_unit": "3,38 €"}}
-- "0,36 € / 1Stk" → {{"price_per_unit": "0,36 €"}}
+Examples (generic patterns):
+- "X,XX € / 1kg" → {{"price_per_unit": "X,XX €"}}
+- "Y,YY € / 1l" → {{"price_per_unit": "Y,YY €"}}
+- "Z,ZZ € / 1Stk" → {{"price_per_unit": "Z,ZZ €"}}
+
+Bottom line example: "3,38 € / 1kg" → Extract exactly "3,38 €"
 
 JSON only. No explanations.
 
@@ -2540,17 +3143,25 @@ JSON:"""
             import re
 
             # Query all available models for consensus
-            all_models = ["llama3.2-vision:11b", "minicpm-v:latest", "llava-llama3:latest"]
+            all_models = ["qwen2.5vl:7b", "minicpm-v:latest", "llava-llama3:latest"]
             all_responses = {}
             valid_prices = []
 
             print(f"      🔍 Debug: Testing all models for price per {unit_type}")
 
+            # Query models SEQUENTIALLY with retry logic
             for model_name in all_models:
                 try:
                     print(f"      🤖 Querying {model_name}...")
-                    response = await self._query_model_simple(model_name, text_region_image, price_per_unit_prompt, timeout=25, step_id="5c2_price_per_unit")
+                    response = await self._query_model_with_retry(
+                        model_name, text_region_image, price_per_unit_prompt,
+                        max_retries=3, timeout=25, step_id="5c2_price_per_unit"
+                    )
                     all_responses[model_name] = response
+
+                    # Small delay between models to prevent overload
+                    await asyncio.sleep(0.5)
+
                     print(f"      📝 {model_name} raw: {response[:120] if response else 'None'}...")
 
                     if response and len(response.strip()) > 5:
@@ -2696,7 +3307,8 @@ JSON:"""
         # Initialize result structure
         result = {
             'price': '',
-            'product_name': '',
+            'product_name_raw': '',      # NEW: Original extracted product name
+            'product_name': '',           # Clean product name (brand removed)
             'brand': '',
             'weight': '',
             'unit': '',
@@ -2710,7 +3322,69 @@ JSON:"""
         # Assemble basic data from visual detection results
         result['price'] = price_data.get('main_price', '')
         result['brand'] = brand_data.get('brand', '')
-        result['product_name'] = name_data.get('product_name', '')
+        result['product_name_raw'] = name_data.get('product_name', '')  # Store raw version
+        result['product_name'] = name_data.get('product_name', '')  # Will be cleaned below
+
+        # FINAL PRICE NORMALIZATION - Ensure consistent "X,XX €" format
+        if result['price']:
+            if '€' in result['price']:
+                # Ensure space before €
+                result['price'] = re.sub(r'(\d+,\d{2})\s*€', r'\1 €', result['price'])
+            else:
+                # Add missing € symbol
+                if re.match(r'^\d+,\d{2}$', result['price']):
+                    result['price'] = f"{result['price']} €"
+            print(f"      💰 Price normalized: {result['price']}")
+
+        # BRAND FALLBACK - Extract from product_name if brand is empty
+        if not result['brand'] and result['product_name']:
+            # Try to extract brand from first 1-2 words of product name
+            words = result['product_name'].split()
+            if len(words) >= 2 and '.' in words[0]:  # e.g., "Dr. Oetker"
+                fallback_brand = f"{words[0]} {words[1]}"
+            elif len(words) >= 1:
+                fallback_brand = words[0]
+            else:
+                fallback_brand = ''
+
+            if fallback_brand:
+                # Normalize the fallback brand
+                fallback_brand = self._normalize_brand_name(fallback_brand)
+                result['brand'] = fallback_brand
+                print(f"      🏢 Brand extracted from product name (fallback): {fallback_brand}")
+
+        # BRAND REMOVAL - Create clean product name by removing brand text
+        if result['brand'] and result['product_name']:
+            # Normalize whitespace for robust comparison
+            product_normalized = ' '.join(result['product_name'].split())
+            brand_normalized = ' '.join(result['brand'].split())
+
+            product_lower = product_normalized.lower()
+            brand_lower = brand_normalized.lower()
+
+            # Check if product name starts with the brand
+            if product_lower.startswith(brand_lower):
+                # Remove brand from start, preserving original case in remaining text
+                # Use normalized brand length to handle spacing differences
+                clean_name = result['product_name'][len(brand_normalized):].strip()
+
+                # Safety check: Ensure at least 1 word remains after removal
+                remaining_words = clean_name.split() if clean_name else []
+
+                if len(remaining_words) >= 1:
+                    result['product_name'] = clean_name
+                    print(f"      🧹 Removed brand '{result['brand']}' from product name")
+                    print(f"         Raw: {result['product_name_raw']}")
+                    print(f"         Clean: {result['product_name']}")
+                else:
+                    print(f"      ⚠️  Brand removal would leave < 1 word, keeping original")
+                    print(f"         Product: '{result['product_name']}' Brand: '{result['brand']}'")
+            else:
+                # Brand not at start - check if it appears elsewhere
+                if brand_lower in product_lower:
+                    print(f"      ⚠️  Brand '{result['brand']}' found mid-string in '{result['product_name']}' - not removing")
+                else:
+                    print(f"      ℹ️  Brand '{result['brand']}' not in product name - already clean")
 
         # Add quantity/weight information
         if quantity_data.get('success'):
@@ -2767,34 +3441,75 @@ JSON:"""
         if unit_data.get('debug_all_responses'):
             result['debug_info']['all_model_responses'] = unit_data['debug_all_responses']
 
-        # Data quality validation
+        # DATA QUALITY SCORING (0-100 scale)
+        quality_score = 0
         validation_issues = []
-        if not result['price']:
+
+        # Price (25 points)
+        if result['price'] and re.match(r'^\d+,\d{2}\s€$', result['price']):
+            quality_score += 25
+        elif result['price']:
+            quality_score += 15
+            validation_issues.append("Price format inconsistent")
+        else:
             validation_issues.append("Missing main price")
-        if not result['product_name']:
+
+        # Product Name (25 points)
+        if result['product_name'] and len(result['product_name']) > 3:
+            quality_score += 25
+        elif result['product_name']:
+            quality_score += 10
+            validation_issues.append("Product name too short")
+        else:
             validation_issues.append("Missing product name")
 
-        # Validate price per unit consistency
+        # Brand (20 points)
+        if result['brand']:
+            quality_score += 20
+        else:
+            validation_issues.append("Missing brand")
+
+        # Unit (15 points)
+        if result['unit'] in ['kg', 'l', 'Stk']:
+            quality_score += 15
+        else:
+            validation_issues.append("Invalid or missing unit")
+
+        # Price Per Unit (15 points)
         per_unit_prices = [
             result.get('price_per_kg'),
             result.get('price_per_piece'),
             result.get('price_per_liter')
         ]
         non_empty_prices = [p for p in per_unit_prices if p]
-        if len(non_empty_prices) > 1:
+
+        if len(non_empty_prices) == 1:
+            quality_score += 15
+        elif len(non_empty_prices) > 1:
             validation_issues.append(f"Multiple per-unit prices set: {non_empty_prices}")
+        else:
+            validation_issues.append("Missing per-unit price")
 
         success = len(validation_issues) == 0
 
-        if success:
-            print(f"      ✅ Final product data assembled successfully")
+        # Log quality assessment
+        if quality_score >= 90:
+            print(f"      ✅ Excellent data quality: {quality_score}/100")
+        elif quality_score >= 70:
+            print(f"      ✅ Good data quality: {quality_score}/100")
+        elif quality_score >= 50:
+            print(f"      ⚠️  Acceptable data quality: {quality_score}/100")
         else:
-            print(f"      ⚠️  Validation issues: {', '.join(validation_issues)}")
+            print(f"      ❌ Poor data quality: {quality_score}/100")
+
+        if validation_issues:
+            print(f"      ⚠️  Issues: {', '.join(validation_issues)}")
 
         result['validation'] = {
             'success': success,
             'issues': validation_issues,
-            'data_quality_score': 1.0 if success else 0.5
+            'data_quality_score': quality_score,
+            'needs_review': quality_score < 70  # Flag for manual review
         }
 
         return result
