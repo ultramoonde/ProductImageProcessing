@@ -1612,6 +1612,85 @@ Fill ONLY the price field that matches the unit. Do not return coordinates or ar
                 name_data, price_data, unit_data, quantity_data, brand_data
             )
 
+            # CRITICAL VALIDATION: Always validate visual unit detection with LLM consensus
+            # Visual OCR can hallucinate, so we cross-check with full context analysis
+            visual_unit = final_result.get('unit', '')
+            needs_llm_validation = (
+                final_result.get('_visual_detection_failed') or  # Complete failure
+                not visual_unit or  # No unit detected
+                (unit_data.get('success') and unit_data.get('confidence', 0) < 0.9)  # Low confidence
+            )
+
+            if needs_llm_validation:
+                print(f"\n⚠️  VISUAL DETECTION NEEDS VALIDATION - ACTIVATING LLM CONSENSUS")
+                print(f"   Reason: {'Failed' if final_result.get('_visual_detection_failed') else 'Low confidence'}")
+                print(f"   Visual unit: '{visual_unit}' (confidence: {unit_data.get('confidence', 0):.2f})")
+                print(f"=" * 60)
+
+                # Call full LLM consensus to extract unit information
+                llm_result = await self.analyze_product_with_consensus(
+                    tile_image, text_region_image, analysis_mode="product"
+                )
+
+                # Extract unit and price information from LLM consensus
+                # Note: analyze_product_with_consensus returns the cleaned product data directly
+                if llm_result and isinstance(llm_result, dict) and 'unit' in llm_result:
+                    consensus_data = llm_result  # Direct product data, not wrapped
+                    llm_unit = consensus_data.get('unit', '')
+
+                    # Handle both price_per_kg and cost_per_kg field names
+                    llm_price_per_kg = consensus_data.get('price_per_kg') or consensus_data.get('cost_per_kg', '')
+                    llm_price_per_liter = consensus_data.get('price_per_liter') or consensus_data.get('cost_per_liter', '')
+                    llm_price_per_piece = consensus_data.get('price_per_piece') or consensus_data.get('cost_per_piece', '')
+
+                    if llm_unit:
+                        # Cross-validate: if LLM disagrees with visual detection, trust LLM (full context)
+                        if visual_unit and visual_unit != llm_unit:
+                            print(f"⚠️  UNIT MISMATCH: Visual='{visual_unit}' vs LLM='{llm_unit}'")
+                            print(f"   🎯 TRUSTING LLM (full context analysis) over visual OCR")
+
+                        print(f"✅ LLM Consensus extracted unit: {llm_unit}")
+                        final_result['unit'] = llm_unit
+
+                        # Apply correct price field based on LLM-detected unit
+                        if llm_unit == 'kg' and llm_price_per_kg:
+                            print(f"   🔧 Applying kg pricing: {llm_price_per_kg}")
+                            final_result['price_per_kg'] = llm_price_per_kg
+                            final_result['price_per_piece'] = ''
+                            final_result['price_per_liter'] = ''
+                            print(f"   ✅ Updated final_result: unit='{final_result['unit']}', price_per_kg='{final_result['price_per_kg']}', price_per_liter='{final_result['price_per_liter']}'")
+                        elif llm_unit == 'l' and llm_price_per_liter:
+                            print(f"   🔧 Applying liter pricing: {llm_price_per_liter}")
+                            final_result['price_per_liter'] = llm_price_per_liter
+                            final_result['price_per_kg'] = ''
+                            final_result['price_per_piece'] = ''
+                            print(f"   ✅ Updated final_result: unit='{final_result['unit']}', price_per_liter='{final_result['price_per_liter']}', price_per_kg='{final_result['price_per_kg']}'")
+                        elif llm_unit == 'Stk' and llm_price_per_piece:
+                            print(f"   🔧 Applying piece pricing: {llm_price_per_piece}")
+                            final_result['price_per_piece'] = llm_price_per_piece
+                            final_result['price_per_kg'] = ''
+                            final_result['price_per_liter'] = ''
+                            print(f"   ✅ Updated final_result: unit='{final_result['unit']}', price_per_piece='{final_result['price_per_piece']}', price_per_kg='{final_result['price_per_kg']}'")
+
+                        # Add debug info from LLM consensus
+                        final_result['debug_info']['llm_consensus_fallback'] = {
+                            'used': True,
+                            'visual_unit': visual_unit,
+                            'llm_unit': llm_unit,
+                            'mismatch': visual_unit != llm_unit,
+                            'confidence': llm_result.get('confidence', 0.0),
+                            'models_agreed': llm_result.get('successful_models', 0)
+                        }
+                        print(f"✅ Validation successful - unit: '{llm_unit}'")
+                    else:
+                        print(f"⚠️  LLM consensus also failed to extract unit - keeping visual result")
+                else:
+                    print(f"⚠️  LLM consensus validation failed - keeping visual result")
+
+                # Remove internal flag if present
+                if '_visual_detection_failed' in final_result:
+                    del final_result['_visual_detection_failed']
+
             print(f"✅ Sequential analysis completed successfully!")
             return final_result
 
@@ -2448,7 +2527,7 @@ Product name:"""
                 except Exception as e:
                     print(f"      ❌ {model_name} failed: {str(e)[:50]}...")
 
-            # Fuzzy Consensus: Group similar responses to handle OCR variations
+            # Enhanced Consensus: Exact-match majority voting first, then fuzzy fallback
             if product_names:
                 from collections import Counter
                 from difflib import SequenceMatcher
@@ -2457,13 +2536,33 @@ Product name:"""
                     """Calculate string similarity ratio (0.0 to 1.0)"""
                     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
-                # Group similar responses (>85% similarity threshold)
+                # STEP 1: Check for exact matches first (TRUE MAJORITY VOTING)
+                exact_counts = Counter(product_names)
+                most_common_exact, exact_frequency = exact_counts.most_common(1)[0]
+
+                # If 2+ models agree exactly, use that (respects true consensus)
+                if exact_frequency >= 2:
+                    print(f"      🎯 EXACT MATCH: {exact_frequency}/{len(product_names)} models returned identical string")
+                    print(f"      ✅ CONSENSUS product name: {most_common_exact} (exact agreement: {exact_frequency}/{len(product_names)} models)")
+
+                    return {
+                        'success': True,
+                        'product_name': most_common_exact,
+                        'source_model': f"exact_consensus_{exact_frequency}_models",
+                        'confidence': 0.95,
+                        'exact_match': True
+                    }
+
+                # STEP 2: No exact majority - use fuzzy grouping as fallback
+                print(f"      ⚠️  No exact majority ({exact_frequency}/{len(product_names)} at best) - using fuzzy grouping")
+
+                # Group similar responses (>90% similarity threshold - stricter than before)
                 grouped_responses = []
                 for name in product_names:
                     # Check if this name is similar to any existing group
                     added_to_group = False
                     for group in grouped_responses:
-                        if similarity(name, group[0]) > 0.85:
+                        if similarity(name, group[0]) > 0.90:  # Raised from 0.85 to 0.90
                             group.append(name)
                             added_to_group = True
                             break
@@ -2474,41 +2573,31 @@ Product name:"""
                 # Find largest group
                 largest_group = max(grouped_responses, key=len)
 
-                # CRITICAL FIX: Vote on first word (brand name) before picking shortest
-                # This prevents picking truncated responses with wrong brand names
+                # Within the fuzzy group, pick most common variant (not shortest!)
                 if len(largest_group) > 1:
-                    from collections import Counter
+                    # Count exact matches within the fuzzy group
+                    group_counts = Counter(largest_group)
+                    most_common_in_group, group_frequency = group_counts.most_common(1)[0]
+                    product_name = most_common_in_group
 
-                    # Extract first word from each response (the brand name)
-                    first_words = [name.split()[0] if name.split() else name for name in largest_group]
-                    word_counts = Counter(first_words)
-                    most_common_first_word, vote_count = word_counts.most_common(1)[0]
-
-                    # Filter to responses that start with the majority first word
-                    correct_brand_responses = [name for name in largest_group if name.split()[0] == most_common_first_word]
-
-                    # NOW pick shortest from the correctly branded responses
-                    product_name = min(correct_brand_responses, key=len)
-
-                    print(f"      🗳️  First word voting: '{most_common_first_word}' won {vote_count}/{len(largest_group)} votes")
-                    if len(correct_brand_responses) < len(largest_group):
-                        rejected = len(largest_group) - len(correct_brand_responses)
-                        print(f"      🚫 Rejected {rejected} response(s) with minority first word")
+                    print(f"      🔍 Fuzzy group size: {len(largest_group)}")
+                    print(f"      🗳️  Most common variant in group: '{product_name}' ({group_frequency}/{len(largest_group)} votes)")
                 else:
                     # Only one response in group, use it
                     product_name = largest_group[0]
 
                 frequency = len(largest_group)
 
-                confidence = 0.95 if frequency >= 2 else 0.75
-                similar_variations = f" (grouped {len(largest_group)} similar responses)" if len(largest_group) > 1 else ""
-                print(f"      ✅ CONSENSUS product name: {product_name} (agreement: {frequency}/{len(product_names)} models){similar_variations}")
+                confidence = 0.85 if frequency >= 2 else 0.70  # Lower confidence for fuzzy matches
+                similar_variations = f" (fuzzy grouped {len(largest_group)} similar responses)" if len(largest_group) > 1 else ""
+                print(f"      ✅ CONSENSUS product name: {product_name} (fuzzy agreement: {frequency}/{len(product_names)} models){similar_variations}")
 
                 return {
                     'success': True,
                     'product_name': product_name,
-                    'source_model': f"consensus_{frequency}_models",
-                    'confidence': confidence
+                    'source_model': f"fuzzy_consensus_{frequency}_models",
+                    'confidence': confidence,
+                    'exact_match': False
                 }
             else:
                 print(f"      ❌ No valid product name found by any model (all responses filtered)")
@@ -2985,6 +3074,7 @@ Bottom line text:"""
             from collections import Counter
             import re
             text_counts = Counter([t['text'] for t in extracted_texts])
+            unit_agreement_ratio = 1.0  # Initialize with full agreement
 
             if text_counts:
                 # If we have consensus (2+ models agree on full text), use that
@@ -3018,6 +3108,10 @@ Bottom line text:"""
 
                         print(f"      🗳️  Unit voting: {dict(unit_counts)}")
                         print(f"      ✅ Winner unit: '{most_common_unit}' ({unit_frequency}/{len(units_only)} models)")
+
+                        # Calculate confidence based on model agreement
+                        # Store for later use in confidence calculation
+                        unit_agreement_ratio = unit_frequency / len(units_only)
 
                         # Find the text response that contains this winning unit
                         for u in units_only:
@@ -3071,10 +3165,19 @@ Bottom line text:"""
                     print(f"      ✅ UNIT DETECTED: {normalized_unit} (from '{pricing_line}')")
 
                 if normalized_unit:
+                    # Calculate confidence based on model agreement
+                    # 3/3 = 1.0 → 0.95, 2/3 = 0.67 → 0.75, 1/3 = 0.33 → 0.50, 1/2 = 0.5 → 0.65
+                    base_confidence = 0.95 if unit_agreement_ratio >= 0.9 else \
+                                    0.80 if unit_agreement_ratio >= 0.75 else \
+                                    0.65 if unit_agreement_ratio >= 0.6 else 0.50
+
+                    print(f"      📊 Unit confidence: {base_confidence:.2f} (agreement: {unit_agreement_ratio:.2f})")
+
                     return {
                         'success': True,
                         'unit': normalized_unit,
-                        'confidence': 0.95,
+                        'confidence': base_confidence,
+                        'agreement_ratio': unit_agreement_ratio,
                         'extracted_text': pricing_line,
                         'debug_all_text_responses': all_text_responses,
                         'debug_extracted_texts': extracted_texts
@@ -3431,11 +3534,12 @@ JSON:"""
                 if result['price']:
                     result['price_per_piece'] = result['price']
         else:
-            print(f"      ⚠️  No per-unit pricing found, using fallback logic")
-            # Fallback: default to Stk if no unit detected
-            result['unit'] = 'Stk'
-            if result['price']:
-                result['price_per_piece'] = result['price']
+            print(f"      ⚠️  Visual unit detection failed - cannot determine unit from image")
+            print(f"      🔄 FALLBACK: Will rely on full LLM consensus (analyze_product_with_consensus)")
+            # DO NOT default to 'Stk' - let the calling function fall back to full LLM consensus
+            # Mark this result as requiring LLM consensus fallback
+            result['unit'] = ''  # Empty unit signals fallback needed
+            result['_visual_detection_failed'] = True  # Internal flag for fallback
 
         # Store all debug responses if available
         if unit_data.get('debug_all_responses'):

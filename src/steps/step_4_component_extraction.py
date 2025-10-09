@@ -416,11 +416,11 @@ def _extract_clean_product_images(original_image: np.ndarray, components_data: L
             detected_lines = _detect_text_lines_bottom_up(text_region)
             print(f"      🔍 Detected {len(detected_lines)} text lines in product {i+1}")
 
-            # Extract actual bottom line (per-unit price) - DYNAMIC
-            bottom_region = _extract_bottom_line_crop(text_region, padding=5)
+            # Extract actual bottom line (per-unit price) - DYNAMIC with generous padding
+            bottom_region = _extract_bottom_line_crop(text_region, padding=20, min_height=60)
 
-            # Extract actual top line (main price) - DYNAMIC
-            top_region = _extract_top_line_crop(text_region, padding=5)
+            # Extract actual top line (main price) - DYNAMIC with generous padding
+            top_region = _extract_top_line_crop(text_region, padding=20, min_height=60)
 
             # Middle region: everything between top and bottom lines
             if len(detected_lines) >= 3:
@@ -538,49 +538,131 @@ def _detect_text_lines_bottom_up(text_region: np.ndarray) -> List[Dict]:
 
     return lines
 
-def _extract_bottom_line_crop(text_region: np.ndarray, padding: int = 10) -> np.ndarray:
+def _extract_bottom_line_crop(text_region: np.ndarray, padding: int = 20, min_height: int = 60) -> np.ndarray:
     """
-    Extract the bottom-most text line with padding.
-    Uses bottom-up line detection to find actual last line.
+    Extract the bottom-most text line with generous padding and consistent dimensions.
+
+    Args:
+        text_region: Input text region
+        padding: Minimum padding around detected text (default: 20px)
+        min_height: Minimum height of output crop (default: 60px)
+
+    Returns:
+        Cropped region with text centered and consistent dimensions
     """
     lines = _detect_text_lines_bottom_up(text_region)
 
     if not lines:
-        # Fallback: return bottom 60px
-        return text_region[-60:, :]
+        # Fallback: return bottom 80px (more generous than before)
+        return text_region[-80:, :]
 
     # Get the bottom-most line (first in reversed list)
     bottom_line = lines[0]
+    detected_height = bottom_line['y_end'] - bottom_line['y_start']
 
-    # Add padding above and below
-    y_start = max(0, bottom_line['y_start'] - padding)
-    y_end = min(text_region.shape[0], bottom_line['y_end'] + padding)
+    # Calculate required height with padding
+    required_height = detected_height + (2 * padding)
+
+    # Enforce minimum height for consistency
+    final_height = max(required_height, min_height)
+
+    # Center the detected text within the final crop
+    text_center_y = (bottom_line['y_start'] + bottom_line['y_end']) // 2
+
+    # Calculate crop bounds to center text
+    y_start = text_center_y - (final_height // 2)
+    y_end = text_center_y + (final_height // 2)
+
+    # Adjust if crop extends beyond image bounds
+    if y_start < 0:
+        y_end = min(y_end - y_start, text_region.shape[0])
+        y_start = 0
+    elif y_end > text_region.shape[0]:
+        overflow = y_end - text_region.shape[0]
+        y_start = max(0, y_start - overflow)
+        y_end = text_region.shape[0]
 
     # Extract crop
     crop = text_region[y_start:y_end, :]
 
+    # If crop is still smaller than min_height, pad with white background
+    if crop.shape[0] < min_height:
+        pad_needed = min_height - crop.shape[0]
+        pad_top = pad_needed // 2
+        pad_bottom = pad_needed - pad_top
+
+        # Create white padding
+        white_color = (255, 255, 255) if len(crop.shape) == 3 else 255
+        crop = cv2.copyMakeBorder(
+            crop,
+            pad_top, pad_bottom, 0, 0,
+            cv2.BORDER_CONSTANT,
+            value=white_color
+        )
+
     return crop
 
-def _extract_top_line_crop(text_region: np.ndarray, padding: int = 10) -> np.ndarray:
+def _extract_top_line_crop(text_region: np.ndarray, padding: int = 20, min_height: int = 60) -> np.ndarray:
     """
-    Extract the top-most text line with padding.
-    Uses bottom-up line detection to find actual first line.
+    Extract the top-most text line with generous padding and consistent dimensions.
+
+    Args:
+        text_region: Input text region
+        padding: Minimum padding around detected text (default: 20px)
+        min_height: Minimum height of output crop (default: 60px)
+
+    Returns:
+        Cropped region with text centered and consistent dimensions
     """
     lines = _detect_text_lines_bottom_up(text_region)
 
     if not lines:
-        # Fallback: return top 60px
-        return text_region[0:60, :]
+        # Fallback: return top 80px (more generous than before)
+        return text_region[0:80, :]
 
     # Get the top-most line (last in reversed list)
     top_line = lines[-1]
+    detected_height = top_line['y_end'] - top_line['y_start']
 
-    # Add padding above and below
-    y_start = max(0, top_line['y_start'] - padding)
-    y_end = min(text_region.shape[0], top_line['y_end'] + padding)
+    # Calculate required height with padding
+    required_height = detected_height + (2 * padding)
+
+    # Enforce minimum height for consistency
+    final_height = max(required_height, min_height)
+
+    # Center the detected text within the final crop
+    text_center_y = (top_line['y_start'] + top_line['y_end']) // 2
+
+    # Calculate crop bounds to center text
+    y_start = text_center_y - (final_height // 2)
+    y_end = text_center_y + (final_height // 2)
+
+    # Adjust if crop extends beyond image bounds
+    if y_start < 0:
+        y_end = min(y_end - y_start, text_region.shape[0])
+        y_start = 0
+    elif y_end > text_region.shape[0]:
+        overflow = y_end - text_region.shape[0]
+        y_start = max(0, y_start - overflow)
+        y_end = text_region.shape[0]
 
     # Extract crop
     crop = text_region[y_start:y_end, :]
+
+    # If crop is still smaller than min_height, pad with white background
+    if crop.shape[0] < min_height:
+        pad_needed = min_height - crop.shape[0]
+        pad_top = pad_needed // 2
+        pad_bottom = pad_needed - pad_top
+
+        # Create white padding
+        white_color = (255, 255, 255) if len(crop.shape) == 3 else 255
+        crop = cv2.copyMakeBorder(
+            crop,
+            pad_top, pad_bottom, 0, 0,
+            cv2.BORDER_CONSTANT,
+            value=white_color
+        )
 
     return crop
 
