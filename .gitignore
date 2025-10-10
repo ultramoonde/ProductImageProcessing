@@ -5,6 +5,8 @@ test_output_*/
 *_20250*/
 FIXED_working_pipeline_*/
 tests/
+test_results/
+batch_processing_*/
 
 # Test files
 test_consensus_fix.py
@@ -17,6 +19,7 @@ pipeline_run.log
 STEP_5C2_CONSENSUS_FIX.md
 TEST_RESULTS_CONSENSUS_FIX.md
 TASK_PROGRESS.md
+docs/analysis/
 
 # Python
 __pycache__/
